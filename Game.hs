@@ -4,7 +4,13 @@ module Game where
 import Geometry
 import Platform
 import FRP.Sodium
+import System.Random (StdGen)
 
+
+type Game p = Event (MouseEvent p)
+           -> Behaviour Double
+           -> StdGen
+           -> Reactive (Behaviour (Sprite p))
 
 data MouseEvent p = MouseDown (Touch p) Point | MouseMove (Touch p) Point | MouseUp (Touch p) Point
 

@@ -1,8 +1,8 @@
 import Engine
 import Freecell
-import GLUT
+import WebGL
 
 
 main = do
     game <- freecell
-    mainProgram (GLUTArgs "freecell") game
+    mainProgram WebGLArgs game

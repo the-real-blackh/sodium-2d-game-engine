@@ -1,5 +1,5 @@
 {-# LANGUAGE DoRec #-}
-module Freecell (freecell, Suit(..), Value(..), Card(..)) where
+module Freecell (freecell) where
 
 import Game
 import Geometry
@@ -8,6 +8,8 @@ import Control.Applicative
 import Control.Monad
 import Data.Traversable (sequenceA)
 import Data.List
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
 import Platform
@@ -32,6 +34,37 @@ instance Enum Card where
 instance Bounded Card where
     minBound = Card minBound minBound
     maxBound = Card maxBound maxBound 
+
+cardFn :: Card -> FilePath
+cardFn (Card v s) = "cards" ++ [pathSeparator] ++ suitName s ++ valueName v ++ ".png"
+  where
+    suitName Spades = "s"
+    suitName Clubs = "c"
+    suitName Diamonds = "d"
+    suitName Hearts = "h"
+    valueName Ace = "1"
+    valueName Two = "2"
+    valueName Three = "3"
+    valueName Four = "4"
+    valueName Five = "5"
+    valueName Six = "6"
+    valueName Seven = "7"
+    valueName Eight = "8"
+    valueName Nine = "9"
+    valueName Ten = "10"
+    valueName Jack = "j"
+    valueName Queen = "q"
+    valueName King = "k"
+
+freecell :: Platform p => IO (Game p)
+freecell = do
+    cards <- forM [minBound..maxBound] $ \card -> do
+        i <- image "cards" (cardFn card)
+        return (card, i)
+    let cardsM = M.fromList cards
+        draw card = fromJust $ M.lookup card cardsM
+    emptySpace <- image "cards" "cards/empty-space.png"
+    return $ game draw emptySpace
 
 noOfStacks :: Int
 noOfStacks = 8
@@ -297,14 +330,14 @@ distributeTo eWhere locations = flip map locations $ \thisLoc ->
                 else Nothing
         ) <$> eWhere
 
-freecell :: Platform p =>
-            (Card -> Drawable p)
-         -> Drawable p
-         -> Event (MouseEvent p)
-         -> Behaviour Double
-         -> StdGen
-         -> Reactive (Behaviour (Sprite p))
-freecell draw emptySpace eMouse time rng = do
+game :: Platform p =>
+        (Card -> Drawable p)
+     -> Drawable p
+     -> Event (MouseEvent p)
+     -> Behaviour Double
+     -> StdGen
+     -> Reactive (Behaviour (Sprite p))
+game draw emptySpace eMouse time rng = do
     let stackCards =
             let (cards, _) = shuffle rng [minBound..maxBound]
             in  toStacks noOfStacks cards

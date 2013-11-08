@@ -1,8 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
-module MainProgram where
+module Engine where
 
 import Platform
-import Game (MouseEvent(..))
+import Game (MouseEvent(..), Game)
 
 import Control.Applicative
 import FRP.Sodium
@@ -42,7 +42,7 @@ getTime t0 = do
 
 mainProgram :: forall p . Platform p =>
                Args p
-            -> (Event (MouseEvent p) -> Behaviour Double -> StdGen -> Reactive (Behaviour (Sprite p)))
+            -> Game p
             -> IO ()
 mainProgram r game = runGraphics r $ \width height resourceDir stateDir internals -> do
     let aspect = fromIntegral width / fromIntegral height
