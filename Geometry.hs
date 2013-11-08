@@ -18,6 +18,9 @@ distance (x0,y0) (x1,y1) = sqrt ((x1-x0)^2 + (y1-y0)^2)
 plus :: Point -> Vector -> Point
 plus (x0, y0) (x1, y1) = (x0+x1, y0+y1)
 
+minus :: Point -> Point -> Vector
+minus (x0, y0) (x1, y1) = (x0 - x1, y0 - y1)
+
 translateRect :: Vector -> Rect -> Rect
 translateRect v (orig, size) = (orig `plus` v, size)
 

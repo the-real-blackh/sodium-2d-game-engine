@@ -2,16 +2,11 @@
         MultiParamTypeClasses, OverloadedStrings #-}
 module GLUT where
 
-import Config
 import Geometry
 import Image
 import CommonAL (SoundInfo(..))
 import qualified CommonAL as CommonAL
 import CommonGL
-import Orientation
-import Page (BackgroundSet(..))
-import Resources
-import Settings (stockThumbs, stockFulls)
 
 import Control.Applicative
 import Control.Concurrent (threadDelay, forkIO)
@@ -252,18 +247,18 @@ instance Platform GLUT where
             GL.scale factor factor 1
             GL.translate $ Vector3 (-px) (-py) (0 :: GLfloat)
             runReaderT action ss
-    preRunSprite font internals brightness (Sprite _ _ mCache action) = do
+    preRunSprite internals brightness (Sprite _ _ mCache action) = do
         let ss = SpriteState {
-                    ssFont = font,
+                    ssFont = error "font not defined!",
                     ssInternals = internals,
                     ssBrightness = 1
                 }
         case mCache of
             Just cache -> runReaderT cache ss
             Nothing    -> return ()
-    runSprite font internals brightness (Sprite _ _ mCache action) flip = do
+    runSprite internals brightness (Sprite _ _ mCache action) flip = do
         let ss = SpriteState {
-                    ssFont = font,
+                    ssFont = error "font not defined!",
                     ssInternals = internals,
                     ssBrightness = 1
                 }
@@ -272,28 +267,6 @@ instance Platform GLUT where
 
     audioThread device bSounds = CommonAL.audioThread device $
         (\(b, gain) -> (map (\(Sound si) -> si) <$> b, realToFrac gain)) <$> bSounds
-
-    fetchAssets cb = do
-        _ <- forkIO $ do
-            res <- createResources "." :: IO (Resources GLUT)
-            threadDelay 500000
-            cb . Just $ fmap toAssetRef (unbgset $ stockThumbs res)
-            --cb Nothing   -- Deny access to the user's photos
-        return ()
-      where
-        unbgset (BackgroundSet s) = s
-        unbgset _                 = Seq.empty
-        toAssetRef (thumb, StockBackground k) = (thumb, AssetRef k)
-        toAssetRef _ = error "fetchAssets.toAssetRef impossible"
-    fetchAsset (AssetRef k) cb = do
-        _ <- forkIO $ do
-            res <- createResources "." :: IO (Resources GLUT)
-            threadDelay 500000
-            cb $ k `M.lookup` (stockFulls res)
-        return ()
-      where
-        unbgset (BackgroundSet s) = s
-        unbgset _                 = Seq.empty
 
     -- Rotate the sprite 90 degrees clockwise
     clockwiseSprite (Sprite key rect cache action) = Sprite key (clockwiseRect rect) cache $ do

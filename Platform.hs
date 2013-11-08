@@ -66,12 +66,9 @@ class (Monoid (Sprite p),
     uncachedLabel :: Rect -> Color4 GLfloat -> Text -> Sprite p
     fade :: GLfloat -> Sprite p -> Sprite p
     shrink :: GLfloat -> Sprite p -> Sprite p
-    preRunSprite :: Font p -> Internals p -> Int -> Sprite p -> IO ()
-    runSprite :: Font p -> Internals p -> Int -> Sprite p -> Bool -> IO ()
+    preRunSprite :: Internals p -> Int -> Sprite p -> IO ()
+    runSprite :: Internals p -> Int -> Sprite p -> Bool -> IO ()
     audioThread :: Device -> [(Behavior [Sound p], Float)] -> IO ()
-    -- Fetch the user's photo album
-    fetchAssets :: (Maybe (Seq (Drawable p, AssetRef p)) -> IO ()) -> IO ()
-    fetchAsset :: AssetRef p -> (Maybe (Drawable p) -> IO ()) -> IO ()
     -- Rotate the sprite 90 degrees clockwise
     clockwiseSprite :: Sprite p -> Sprite p
     -- Rotate the sprite 90 degrees anti-clockwise
