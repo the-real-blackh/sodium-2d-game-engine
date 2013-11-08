@@ -1,18 +1,21 @@
 {-# LANGUAGE ForeignFunctionInterface, TypeFamilies, FlexibleInstances,
-        MultiParamTypeClasses, OverloadedStrings #-}
+        MultiParamTypeClasses, OverloadedStrings, Rank2Types #-}
 module GLUT where
 
-import Geometry
-import Image
 import CommonAL (SoundInfo(..))
 import qualified CommonAL as CommonAL
 import CommonGL
+import Geometry
+import Image
+import Platform
 
 import Control.Applicative
 import Control.Concurrent (threadDelay, forkIO)
+import Control.Exception (evaluate)
 import Control.Monad.Reader
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C
+import Data.Time.Clock
 import Data.IORef
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -21,7 +24,7 @@ import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Platform
+import FRP.Sodium
 import System.FilePath
 import Foreign hiding (unsafePerformIO)
 import Foreign.C
@@ -32,9 +35,150 @@ import qualified Graphics.UI.GLUT as GLUT hiding (Rect, translate)
 import System.Exit
 import System.FilePath
 import System.IO.Unsafe
+import System.Mem
+import System.Random (newStdGen)
 import Text.XML.Expat.Pickle
 import Text.XML.Expat.Tree
 
+
+-- | Get system time in seconds since the start of the Unix epoch
+-- (1 Jan 1970).
+getTime :: UTCTime -> IO Double
+getTime t0 = do
+    t <- getCurrentTime
+    return $ realToFrac (t `diffUTCTime` t0)
+
+glutEngine :: Args GLUT
+           -> Game GLUT
+           -> IO ()
+glutEngine (GLUTArgs title) game = runGraphics $ \width height resourceDir stateDir internals -> do
+    let aspect = fromIntegral width / fromIntegral height
+    putStrLn $ "screen size:  "++show width++" x "++show height
+    putStrLn $ "resource dir: "++resourceDir
+
+    (eMouse, sendMouse) <- sync $ newEvent
+    let touched touch phase x y = do
+            let e = case phase of
+                    TouchBegan     -> MouseDown touch (x,y)
+                    TouchMoved     -> MouseMove touch (x,y)
+                    TouchEnded     -> MouseUp   touch (x,y)
+                    TouchCancelled -> MouseUp   touch (x,y)
+            --print e
+            sync $ sendMouse e
+
+    blend $= Enabled
+    blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
+
+    (time, sendTime) <- sync $ newBehavior 0
+    (realTime, sendRealTime) <- sync $ newBehavior 0
+    rng <- newStdGen
+    bSprite <- sync $ game eMouse time rng
+    spriteRef <- newIORef =<< sync (sample bSprite)
+    kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
+
+    let kill = kill1
+
+    t0 <- getCurrentTime
+    tLastEndRef <- newIORef =<< getTime t0
+    timeLostRef <- newIORef 0
+    tLastGC <- newIORef 0
+
+    let updateFrame = do
+            --t <- getTime
+            t <- readIORef tLastEndRef
+            lost <- readIORef timeLostRef
+            --putStrLn $ showFFloat (Just 3) (t - lost) ""
+            sync $ do
+                sendTime (t - lost)
+                sendRealTime t
+            sprite <- readIORef spriteRef
+            preRunSprite internals height sprite
+            tEnd <- getTime t0
+            let lost = tEnd - t
+            when (lost >= 0.1) $ do
+                since <- (\last -> tEnd - last) <$> readIORef tLastGC
+                if lost >= 0.25 && since >= 3 then do
+                    --putStrLn "major GC"
+                    performGC
+                    tEnd' <- getTime t0
+                    writeIORef tLastGC tEnd'
+                    let lost' = tEnd' - t
+                    modifyIORef timeLostRef (+lost')
+                  else
+                    modifyIORef timeLostRef (+lost)
+                --putStrLn $ "PRE " ++ showFFloat (Just 3) lost ""
+    let drawFrame = do
+            tStart <- getTime t0
+            GL.clear [ColorBuffer]
+            loadIdentity
+            GL.scale (0.001/realToFrac aspect) 0.001 (0.001 :: GLfloat)
+            sprite <- readIORef spriteRef
+            runSprite internals height sprite True
+            tEnd <- getTime t0
+            writeIORef tLastEndRef tEnd
+            _ <- evaluate kill
+            return ()
+
+    updateFrame
+    return (updateFrame, drawFrame, touched)
+  where
+    runGraphics init = do
+        _ <- GLUT.getArgsAndInitialize
+        GLUT.initialDisplayMode $= [GLUT.DoubleBuffered]
+        GLUT.createWindow title
+        let width = 960
+            height = 640
+            resourceDir = "."
+            aspect = realToFrac width / realToFrac height
+        GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
+        cache <- newCache height
+        let internals = GLUTInternals {
+                    inCache = cache
+                }
+        (updateFrame, drawFrame, touched) <- init width height resourceDir resourceDir internals
+
+        GLUT.displayCallback $= display updateFrame drawFrame
+        GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
+
+        let motion (GLUT.Position x y) = do
+                (x', y') <- toScreen x y
+                touched () TouchMoved x' y'
+        GLUT.motionCallback $= Just motion
+        GLUT.passiveMotionCallback $= Just motion
+        GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
+            case (key, keyState, pos) of
+                (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
+                    (x', y') <- toScreen x y
+                    touched () TouchBegan x' y'
+                (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
+                    (x', y') <- toScreen x y
+                    touched () TouchEnded x' y'
+                (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
+                    exitSuccess
+                _ -> return ()
+          )
+        
+        GLUT.mainLoop
+
+      where
+        toScreen :: GLint -> GLint -> IO (Coord, Coord)
+        toScreen x y = do
+            (_, Size w h) <- get viewport
+            let aspect = fromIntegral w / fromIntegral h
+                sx = 0.001/aspect
+                sy = 0.001
+                xx = 2 * ((fromIntegral x / fromIntegral w) - 0.5) / sx
+                yy = 2 * (0.5 - (fromIntegral y / fromIntegral h)) / sy
+            return (xx, yy)
+        repaint = do
+            GLUT.postRedisplay Nothing
+            GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
+
+        display :: IO () -> IO () -> IO ()
+        display updateFrame drawFrame = do
+            updateFrame
+            drawFrame
+            GLUT.swapBuffers
 
 data SpriteState = SpriteState {
         ssFont       :: Font GLUT,
@@ -95,63 +239,7 @@ instance Platform GLUT where
     type Touch GLUT = ()
     data AssetRef GLUT = AssetRef Key deriving (Eq, Show)
 
-    runGraphics (GLUTArgs title) init = do
-        _ <- GLUT.getArgsAndInitialize
-        GLUT.initialDisplayMode $= [GLUT.DoubleBuffered]
-        GLUT.createWindow title
-        let width = 960
-            height = 640
-            resourceDir = "."
-            aspect = realToFrac width / realToFrac height
-        GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
-        cache <- newCache height
-        let internals = GLUTInternals {
-                    inCache = cache
-                }
-        (updateFrame, drawFrame, touched) <- init width height resourceDir resourceDir internals
-
-        GLUT.displayCallback $= display updateFrame drawFrame
-        GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
-
-        let motion (GLUT.Position x y) = do
-                (x', y') <- toScreen x y
-                touched () TouchMoved x' y'
-        GLUT.motionCallback $= Just motion
-        GLUT.passiveMotionCallback $= Just motion
-        GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
-            case (key, keyState, pos) of
-                (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
-                    (x', y') <- toScreen x y
-                    touched () TouchBegan x' y'
-                (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
-                    (x', y') <- toScreen x y
-                    touched () TouchEnded x' y'
-                (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
-                    exitSuccess
-                _ -> return ()
-          )
-        
-        GLUT.mainLoop
-
-      where
-        toScreen :: GLint -> GLint -> IO (Coord, Coord)
-        toScreen x y = do
-            (_, Size w h) <- get viewport
-            let aspect = fromIntegral w / fromIntegral h
-                sx = 0.001/aspect
-                sy = 0.001
-                xx = 2 * ((fromIntegral x / fromIntegral w) - 0.5) / sx
-                yy = 2 * (0.5 - (fromIntegral y / fromIntegral h)) / sy
-            return (xx, yy)
-        repaint = do
-            GLUT.postRedisplay Nothing
-            GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
-
-        display :: IO () -> IO () -> IO ()
-        display updateFrame drawFrame = do
-            updateFrame
-            drawFrame
-            GLUT.swapBuffers
+    engine = glutEngine
 
     mkDrawable action = drawAt NullKey action
 

@@ -1,8 +1,8 @@
-import Engine
 import Freecell
 import GLUT
+import Platform (engine)
 
 
 main = do
     game <- freecell
-    mainProgram (GLUTArgs "freecell") game
+    engine (GLUTArgs "freecell") game

@@ -1,8 +1,8 @@
-import Engine
 import Freecell
+import Platform (engine)
 import WebGL
 
 
 main = do
     game <- freecell
-    mainProgram WebGLArgs game
+    engine WebGLArgs game

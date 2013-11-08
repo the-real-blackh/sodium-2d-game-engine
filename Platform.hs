@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies, GeneralizedNewtypeDeriving, FlexibleInstances,
-        MultiParamTypeClasses, FlexibleContexts #-}
+        MultiParamTypeClasses, FlexibleContexts, StandaloneDeriving,
+        UndecidableInstances #-}
 module Platform where
 
 import Geometry
@@ -8,11 +9,21 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Monoid
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import FRP.Sodium
 import Graphics.Rendering.OpenGL.GL as GL hiding (Rect)
 import Sound.OpenAL
 import System.FilePath
-import FRP.Sodium
+import System.Random (StdGen)
 import Text.XML.Expat.Pickle
+
+data MouseEvent p = MouseDown (Touch p) Point | MouseMove (Touch p) Point | MouseUp (Touch p) Point
+
+deriving instance Show (Touch p) => Show (MouseEvent p)
+
+type Game p = Event (MouseEvent p)
+           -> Behaviour Double
+           -> StdGen
+           -> Reactive (Behaviour (Sprite p))
 
 data TouchPhase = TouchBegan | TouchMoved | TouchEnded | TouchCancelled deriving (Eq, Ord, Show, Enum)
 
@@ -43,7 +54,7 @@ class (Monoid (Sprite p),
     data Sound p
     type Touch p
     data AssetRef p
-    runGraphics :: Args p -> (Int -> Int -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touched p)) -> IO ()
+    engine :: Args p -> Game p -> IO ()
     nullDrawable :: Drawable p
     nullDrawable = mkDrawable $ \_ -> return ()
     mkDrawable :: (GLfloat -> IO ()) -> Drawable p

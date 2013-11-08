@@ -1,7 +1,6 @@
 {-# LANGUAGE DoRec #-}
 module Freecell (freecell) where
 
-import Game
 import Geometry
 import FRP.Sodium
 import Control.Applicative
