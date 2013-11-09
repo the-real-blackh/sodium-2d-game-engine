@@ -1,0 +1,170 @@
+<html>
+
+<head>
+<title>Hello</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="gl-matrix-min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+
+<script language="javascript" src="lib.js"></script>
+<script language="javascript" src="rts.js"></script>
+<script language="javascript" src="lib1.js"></script>
+<script language="javascript" src="out.js"></script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    void main(void) {
+        gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+
+    varying vec2 vTextureCoord;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+        vTextureCoord = aTextureCoord;
+    }
+</script>
+
+<script type="text/javascript">
+
+    function initGL(canvas) {
+        canvas.width = document.documentElement.clientWidth;
+        canvas.height = document.documentElement.clientHeight;
+        var gl;
+        try {
+            gl = canvas.getContext("webgl");
+        }
+        catch (x) { gl = null; }
+        if (gl == null) {
+            try {
+                gl = canvas.getContext("experimental-webgl");
+            }
+            catch (x) { gl = null; }
+        }
+        if (!gl) {
+            alert("Could not initialise WebGL, sorry :-(");
+        }
+        gl.viewportWidth = canvas.width;
+        gl.viewportHeight = canvas.height;
+
+        return gl;
+    }
+
+    var pos;
+    var pMatrixUniform;
+    var mvMatrixUniform;
+    var pMatrix = mat4.create();
+    var mvMatrix = mat4.create();
+    var samplerUniform;
+    var vShader;
+    var fShader;
+    var program;
+    var texCoordAttr;
+    var texture;
+    var texCoords;
+
+    function squareBuffer(gl)
+    {
+        vShader = createShaderFromScriptElement(gl, "shader-vs");
+        fShader = createShaderFromScriptElement(gl, "shader-fs");
+        var program = createProgram(gl, [vShader, fShader]);
+        gl.useProgram(program);
+
+        pos = gl.getAttribLocation(program, "aVertexPosition");
+        pMatrixUniform = gl.getUniformLocation(program, "uPMatrix");
+        mvMatrixUniform = gl.getUniformLocation(program, "uMVMatrix");
+
+        texCoordAttr = gl.getAttribLocation(program, "aTextureCoord");
+        gl.enableVertexAttribArray(texCoordAttr);
+        samplerUniform = gl.getUniformLocation(program, "uSampler");
+
+        texture = gl.createTexture();
+        texture.image = new Image();
+        texture.image.onload = function() {
+            handleLoadedTexture(gl,texture)
+        }
+        texture.image.src = "cat.png";
+
+        texCoords = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
+        var textureCoords = [
+          // Front face
+          0.0, 0.0,
+          1.0, 0.0,
+          0.0, 1.0,
+          1.0, 1.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+        texCoords.itemSize = 2;
+        texCoords.numItems = 4;
+
+        mat4.identity(pMatrix);
+        mat4.scale(pMatrix, pMatrix, [gl.viewportHeight / gl.viewportWidth, 1, 1]);
+
+        var buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        var vertices = [
+            -1.0,  1.0,  0.0,
+             1.0,  1.0,  0.0,
+            -1.0, -1.0,  0.0,
+             1.0, -1.0,  0.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        buf.itemSize = 3;
+        buf.numItems = 4;
+        return buf;
+    }
+
+    function handleLoadedTexture(gl,texture) {
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+
+    function drawShape(gl,buf)
+    {
+        mat4.identity(mvMatrix);
+        mat4.scale(mvMatrix, mvMatrix, [0.5, 0.5, 1]);
+        //mat4.translate(mvMatrix, [-0.25, 0.0, -0.25]);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
+        gl.vertexAttribPointer(texCoordAttr, texCoords.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(samplerUniform, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.enableVertexAttribArray(pos);
+        gl.vertexAttribPointer(pos, buf.itemSize, gl.FLOAT, false, 0, 0);
+        gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
+        gl.uniformMatrix4fv(mvMatrixUniform, false, mvMatrix);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, buf.numItems);
+    }
+</script>
+
+<meta name="viewport" content="width=device-width">
+</head>
+
+<body onload="h$main(h$mainZCMainzimain);" style="margin:0px;height:100%">
+    <canvas id="mycanvas" style="border:none"></canvas>
+</body>
+
+</html>

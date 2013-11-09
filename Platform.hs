@@ -52,8 +52,6 @@ class (Monoid (Sprite p),
     type Touch p
     engine :: Args p -> Game p -> IO ()
     nullDrawable :: Drawable p
-    nullDrawable = mkDrawable $ \_ -> return ()
-    mkDrawable :: (GLfloat -> IO ()) -> Drawable p
     image :: FilePath -> FilePath -> IO (Drawable p)
     sound :: FilePath -> FilePath -> IO (Sound p)
     retainSound :: Sound p -> IO ()

@@ -239,7 +239,7 @@ instance Platform GLUT where
 
     engine args game = glEngine (initGraphics args) game
 
-    mkDrawable action = drawAt NullKey action
+    nullDrawable = drawAt NullKey $ \_ -> return ()
 
     image resDir path = do
         let key = ByteStringKey $ C.pack $ takeFileName path
