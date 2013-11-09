@@ -109,10 +109,12 @@ drawBB = do
     clientState VertexArray $= Disabled
     clientState TextureCoordArray $= Disabled
 
+{-
 colouredRectangle :: Platform p => Color4 GLfloat -> Drawable p
 colouredRectangle (Color4 r g b _) = mkDrawable $ \brightness -> do
     color (Color4 r g b brightness)
     drawBB
+-}
 
 data Entry = Entry {
         eDraw    :: Point -> GLfloat -> IO (),

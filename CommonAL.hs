@@ -84,7 +84,7 @@ audioThread device bSounds = do
     forM_ bSounds $ \(bSound, gain) -> forkIO $ do
         tv <- atomically $ newTVar Nothing
         kill <- sync $ do
-            let v = coalesce const (values bSound)
+            let v = coalesce const (value bSound)
             listen v $ \fRefs -> atomically $ writeTVar tv (Just fRefs)
 
         (src, buffers) <- do

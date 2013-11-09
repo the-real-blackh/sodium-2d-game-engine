@@ -37,8 +37,6 @@ import System.FilePath
 import System.IO.Unsafe
 import System.Mem
 import System.Random (newStdGen)
-import Text.XML.Expat.Pickle
-import Text.XML.Expat.Tree
 
 
 -- | Get system time in seconds since the start of the Unix epoch
@@ -48,10 +46,11 @@ getTime t0 = do
     t <- getCurrentTime
     return $ realToFrac (t `diffUTCTime` t0)
 
-glutEngine :: Args GLUT
-           -> Game GLUT
-           -> IO ()
-glutEngine (GLUTArgs title) game = runGraphics $ \width height resourceDir stateDir internals -> do
+glEngine :: Platform p =>
+            ((Int -> Int -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touch p -> TouchPhase -> Coord -> Coord -> IO ())) -> IO ())
+         -> Game p
+         -> IO ()
+glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir internals -> do
     let aspect = fromIntegral width / fromIntegral height
     putStrLn $ "screen size:  "++show width++" x "++show height
     putStrLn $ "resource dir: "++resourceDir
@@ -121,64 +120,67 @@ glutEngine (GLUTArgs title) game = runGraphics $ \width height resourceDir state
 
     updateFrame
     return (updateFrame, drawFrame, touched)
-  where
-    runGraphics init = do
-        _ <- GLUT.getArgsAndInitialize
-        GLUT.initialDisplayMode $= [GLUT.DoubleBuffered]
-        GLUT.createWindow title
-        let width = 960
-            height = 640
-            resourceDir = "."
-            aspect = realToFrac width / realToFrac height
-        GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
-        cache <- newCache height
-        let internals = GLUTInternals {
-                    inCache = cache
-                }
-        (updateFrame, drawFrame, touched) <- init width height resourceDir resourceDir internals
 
-        GLUT.displayCallback $= display updateFrame drawFrame
+initGraphics :: Args GLUT
+             -> (Int -> Int -> FilePath -> FilePath -> Internals GLUT -> IO (IO (), IO (), Touch GLUT -> TouchPhase -> Coord -> Coord -> IO ()))
+             -> IO ()
+initGraphics (GLUTArgs title) init = do
+    _ <- GLUT.getArgsAndInitialize
+    GLUT.initialDisplayMode $= [GLUT.DoubleBuffered]
+    GLUT.createWindow title
+    let width = 960
+        height = 640
+        resourceDir = "."
+        aspect = realToFrac width / realToFrac height
+    GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
+    cache <- newCache height
+    let internals = GLUTInternals {
+                inCache = cache
+            }
+    (updateFrame, drawFrame, touched) <- init width height resourceDir resourceDir internals
+
+    GLUT.displayCallback $= display updateFrame drawFrame
+    GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
+
+    let motion (GLUT.Position x y) = do
+            (x', y') <- toScreen x y
+            touched () TouchMoved x' y'
+    GLUT.motionCallback $= Just motion
+    GLUT.passiveMotionCallback $= Just motion
+    GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
+        case (key, keyState, pos) of
+            (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
+                (x', y') <- toScreen x y
+                touched () TouchBegan x' y'
+            (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
+                (x', y') <- toScreen x y
+                touched () TouchEnded x' y'
+            (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
+                exitSuccess
+            _ -> return ()
+      )
+    
+    GLUT.mainLoop
+
+  where
+    toScreen :: GLint -> GLint -> IO (Coord, Coord)
+    toScreen x y = do
+        (_, Size w h) <- get viewport
+        let aspect = fromIntegral w / fromIntegral h
+            sx = 0.001/aspect
+            sy = 0.001
+            xx = 2 * ((fromIntegral x / fromIntegral w) - 0.5) / sx
+            yy = 2 * (0.5 - (fromIntegral y / fromIntegral h)) / sy
+        return (xx, yy)
+    repaint = do
+        GLUT.postRedisplay Nothing
         GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
 
-        let motion (GLUT.Position x y) = do
-                (x', y') <- toScreen x y
-                touched () TouchMoved x' y'
-        GLUT.motionCallback $= Just motion
-        GLUT.passiveMotionCallback $= Just motion
-        GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
-            case (key, keyState, pos) of
-                (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
-                    (x', y') <- toScreen x y
-                    touched () TouchBegan x' y'
-                (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
-                    (x', y') <- toScreen x y
-                    touched () TouchEnded x' y'
-                (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
-                    exitSuccess
-                _ -> return ()
-          )
-        
-        GLUT.mainLoop
-
-      where
-        toScreen :: GLint -> GLint -> IO (Coord, Coord)
-        toScreen x y = do
-            (_, Size w h) <- get viewport
-            let aspect = fromIntegral w / fromIntegral h
-                sx = 0.001/aspect
-                sy = 0.001
-                xx = 2 * ((fromIntegral x / fromIntegral w) - 0.5) / sx
-                yy = 2 * (0.5 - (fromIntegral y / fromIntegral h)) / sy
-            return (xx, yy)
-        repaint = do
-            GLUT.postRedisplay Nothing
-            GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
-
-        display :: IO () -> IO () -> IO ()
-        display updateFrame drawFrame = do
-            updateFrame
-            drawFrame
-            GLUT.swapBuffers
+    display :: IO () -> IO () -> IO ()
+    display updateFrame drawFrame = do
+        updateFrame
+        drawFrame
+        GLUT.swapBuffers
 
 data SpriteState = SpriteState {
         ssFont       :: Font GLUT,
@@ -215,9 +217,6 @@ drawAt key action rect@((posX, posY),(sizeX, sizeY)) = Sprite key rect Nothing $
         GL.scale (realToFrac sizeX) (realToFrac sizeY) (1 :: GLfloat)
         action brightness
 
-instance XmlPickler [UNode Text] (AssetRef GLUT) where
-    xpickle = xpWrap (AssetRef, \(AssetRef k) -> k) $ xpElemAttrs "stock" (xpAttr "key" xpickle)
-
 instance Platform GLUT where
     data Args GLUT = GLUTArgs {
             gaTitle :: String
@@ -237,9 +236,8 @@ instance Platform GLUT where
         }
     newtype Sound GLUT = Sound (IORef SoundInfo)
     type Touch GLUT = ()
-    data AssetRef GLUT = AssetRef Key deriving (Eq, Show)
 
-    engine = glutEngine
+    engine args game = glEngine (initGraphics args) game
 
     mkDrawable action = drawAt NullKey action
 

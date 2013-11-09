@@ -42,9 +42,6 @@ instance XmlPickler Text Key where
     xpickle = xpPrim
 
 class (Monoid (Sprite p),
-       Eq (AssetRef p),
-       Show (AssetRef p),
-       XmlPickler [UNode Text] (AssetRef p),
        Eq (Touch p),
        Ord (Touch p)) => Platform p where
     data Args p
@@ -53,7 +50,6 @@ class (Monoid (Sprite p),
     data Font p
     data Sound p
     type Touch p
-    data AssetRef p
     engine :: Args p -> Game p -> IO ()
     nullDrawable :: Drawable p
     nullDrawable = mkDrawable $ \_ -> return ()
@@ -62,8 +58,6 @@ class (Monoid (Sprite p),
     sound :: FilePath -> FilePath -> IO (Sound p)
     retainSound :: Sound p -> IO ()
     translateSprite :: (Coord, Coord) -> Sprite p -> Sprite p
-    at :: Drawable p -> Rect -> Sprite p
-    at = ($)
     createFont :: FilePath
                -> Float         -- Y correction upwards fraction of 1.
                -> IO (Font p)
