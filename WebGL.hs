@@ -26,7 +26,10 @@ instance Monoid (Sprite WebGL) where
 instance Platform WebGL where
     data Args WebGL = WebGLArgs
     data Internals WebGL = WebGLInternals
-    data Sprite WebGL = Sprite (IO ())
+    data Sprite WebGL = Sprite {
+            spKey :: Key,
+            spDraw :: IO ()
+        }
     data Font WebGL = Font {
             ftFont :: FTGL.Font,
             ftYCorr :: Float
@@ -37,7 +40,9 @@ instance Platform WebGL where
     engine _ game = do
 
     image resDir path = do
-        return $ \rect@((posX, posY),(sizeX, sizeY)) ->
+        return $ \rect@((posX, posY),(sizeX, sizeY)) -> Sprite {
+             
+            }
 
     sound resDir file = error "WebGL.sound undefined"
 
@@ -45,14 +50,7 @@ instance Platform WebGL where
 
     translateSprite v@(vx, vy) (Sprite key rect cache action) = error "WebGL.translateSprite undefined"
     createFont resPath ycorr = error "WebGL.createFont undefined"
-    uncachedLabel rect@((posX, posY), _) (Color4 r g b _) text = Sprite (TextKey text) rect Nothing $ do
-        when simulateIOSSpeed $ liftIO $ threadDelay 10000
-        ft <- asks ssFont
-        internals <- asks ssInternals
-        brightness <- asks ssBrightness
-        liftIO $ preservingMatrix $ do
-            GL.translate $ Vector3 (realToFrac posX) (realToFrac posY) (0 :: GLfloat)
-            glLabel (ftFont ft) (ftYCorr ft) rect (Color4 r g b brightness) text
+    uncachedLabel rect@((posX, posY), _) (Color4 r g b _) text = error "WebGL.uncachedLabel undefined"
     key k s = s { spKey = k }
     keyOf d = spKey $ d ((0,0),(0,0))
     setBoundingBox r s = s { spRect = r }
