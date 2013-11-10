@@ -118,7 +118,7 @@ colouredRectangle (Color4 r g b _) = mkDrawable $ \brightness -> do
 offscreen :: Rect
           -> Int
           -> Maybe (GLint -> GLint -> IO ()) -> (GLfloat -> IO ())
-          -> IO (Point -> GLfloat -> IO (), IO ())
+          -> IO ((Point, GLfloat) -> IO (), IO ())
 offscreen rect@((posX, posY), size@(sizeX, sizeY)) screenHt multisample draw = do
     --putStrLn $ "cache "++show key++" "++show rect
     [fbo] <- genObjectNames 1
@@ -183,7 +183,7 @@ offscreen rect@((posX, posY), size@(sizeX, sizeY)) screenHt multisample draw = d
         scaleY = realToFrac $ sizeY * fi pixels / fi height
         shiftX = realToFrac $ fi (pixels - width) / fi pixels
         shiftY = realToFrac $ fi (height - pixels) / fi pixels
-    let draw (posX, posY) brightness = preservingMatrix $ do
+    let draw ((posX, posY), brightness) = preservingMatrix $ do
             textureBinding Texture2D $= Just to
             texture Texture2D $= Enabled
             GL.translate $ Vector3 (realToFrac $ posX) (realToFrac $ posY) (0 :: GLfloat)

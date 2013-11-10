@@ -224,7 +224,7 @@ instance Platform GLUT where
             gaTitle :: String
         }
     data Internals GLUT = GLUTInternals {
-            inCache    :: Cache,
+            inCache    :: Cache (Point, GLfloat),
             inScreenHt :: Int
         }
     data Sprite GLUT = Sprite {
@@ -234,7 +234,7 @@ instance Platform GLUT where
             spDraw  :: ReaderT SpriteState IO ()
         }
     data Font GLUT = Font {
-            ftFont :: FTGL.Font,
+            ftFont  :: FTGL.Font,
             ftYCorr :: Float
         }
     newtype Sound GLUT = Sound (IORef SoundInfo)
@@ -254,7 +254,7 @@ instance Platform GLUT where
                         when simulateIOSSpeed $ liftIO $ threadDelay 600
                         ti <- loadTexture path False
                         to <- createTexture ti
-                        let draw' _ brightness = do
+                        let draw' (_, brightness) = do
                                 color $ Color4 1 1 1 brightness
                                 textureBinding Texture2D $= Just to
                                 texture Texture2D $= Enabled
@@ -272,7 +272,7 @@ instance Platform GLUT where
                         GL.scale (realToFrac sizeX) (realToFrac sizeY) (1 :: GLfloat)
                         mDraw <- readCache cache key
                         case mDraw of
-                            Just draw -> draw (posX, posY) brightness
+                            Just draw -> draw ((posX, posY), brightness)
                             Nothing   -> return ()
             in  Sprite key rect cacheIt drawIt
 
@@ -322,7 +322,7 @@ instance Platform GLUT where
                 liftIO $ do
                     mDraw' <- readCache cache key
                     case mDraw' of
-                        Just draw' -> draw' pos (ssBrightness ss)
+                        Just draw' -> draw' (pos, ssBrightness ss)
                         Nothing    -> return ()
         in Sprite key rect (cache1 `appendCache` Just cache2) draw
     fade brightness (Sprite key rect cache action) = Sprite key rect cache $ do

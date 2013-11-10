@@ -17,25 +17,25 @@ import qualified Data.Map as M
 import Graphics.Rendering.OpenGL as GL hiding (Triangle, Rect, translate, normal)
 
 
-data Cache = Cache {
-        ccTableRef :: IORef (Map Key Entry)
+data Cache args = Cache {
+        ccTableRef :: IORef (Map Key (Entry args))
     }
 
-data Entry = Entry {
-        eDraw    :: Point -> GLfloat -> IO (),
+data Entry args = Entry {
+        eDraw    :: args -> IO (),
         eCleanup :: IO (),
         eTouched :: Bool
     }
 
-newCache :: IO Cache
+newCache :: IO (Cache args)
 newCache = Cache <$> newIORef M.empty
 
-readCache :: Cache -> Key -> IO (Maybe (Point -> GLfloat -> IO ()))
+readCache :: Cache args -> Key -> IO (Maybe (args -> IO ()))
 readCache cache key = do
     table <- readIORef (ccTableRef cache)
     return $ eDraw `fmap` M.lookup key table
 
-writeCache :: Cache -> Key -> IO (Point -> GLfloat -> IO (), IO ()) -> IO ()
+writeCache :: Cache args -> Key -> IO (args -> IO (), IO ()) -> IO ()
 writeCache cache key mkDraw = do
     table <- readIORef (ccTableRef cache)
     case M.lookup key table of
@@ -50,7 +50,7 @@ writeCache cache key mkDraw = do
                     }
             writeIORef (ccTableRef cache) $ M.insert key entry table
 
-flipCache :: Cache -> IO ()
+flipCache :: Cache args -> IO ()
 flipCache cache = do
     table <- readIORef (ccTableRef cache)
     let (table', toClean) = M.partition eTouched table
