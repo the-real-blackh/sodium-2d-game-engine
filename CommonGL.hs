@@ -13,7 +13,6 @@ import Control.Monad.Reader
 import Control.Monad.Trans
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C
-import Data.IORef
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
@@ -116,34 +115,6 @@ colouredRectangle (Color4 r g b _) = mkDrawable $ \brightness -> do
     drawBB
 -}
 
-data Entry = Entry {
-        eDraw    :: Point -> GLfloat -> IO (),
-        eCleanup :: IO (),
-        eTouched :: Bool
-    }
-
-data Cache = Cache {
-        ccTableRef :: IORef (Map Key Entry),
-        ccScreenHt :: Int
-    }
-
-newCache :: Int -> IO Cache
-newCache screenHt = Cache <$> newIORef M.empty <*> pure screenHt
-
-flipCache :: Cache -> IO ()
-flipCache cache = do
-    table <- readIORef (ccTableRef cache)
-    let (table', toClean) = M.partition eTouched table
-    writeIORef (ccTableRef cache) $ M.map unTouch table'
-    --when (not $ M.null toClean) $ print (M.keys toClean)
-    case M.elems toClean of
-        [] -> return ()
-        items -> do
-            --putStrLn $ "clean "++show (length items)
-            forM_ items $ \e -> eCleanup e
-  where
-    unTouch e = e { eTouched = False }
-
 offscreen :: Rect
           -> Int
           -> Maybe (GLint -> GLint -> IO ()) -> (GLfloat -> IO ())
@@ -221,26 +192,6 @@ offscreen rect@((posX, posY), size@(sizeX, sizeY)) screenHt multisample draw = d
             GL.color $ Color4 1 1 1 brightness
             drawBB
     return (draw, deleteObjectNames [to])
-
-readCache :: Cache -> Key -> IO (Maybe (Point -> GLfloat -> IO ()))
-readCache cache key = do
-    table <- readIORef (ccTableRef cache)
-    return $ eDraw `fmap` M.lookup key table
-
-writeCache :: Cache -> Key -> IO (Point -> GLfloat -> IO (), IO ()) -> IO ()
-writeCache cache key mkDraw = do
-    table <- readIORef (ccTableRef cache)
-    case M.lookup key table of
-        Just entry -> do
-            writeIORef (ccTableRef cache) $ M.insert key (entry { eTouched = True }) table
-        Nothing -> do
-            (draw, cleanup) <- mkDraw
-            let entry = Entry {
-                        eDraw    = draw,
-                        eCleanup = cleanup,
-                        eTouched = True
-                    }
-            writeIORef (ccTableRef cache) $ M.insert key entry table
 
 glLabel :: FTGL.Font
         -> Float        -- Y correction upwards, %

@@ -2,6 +2,7 @@
         MultiParamTypeClasses, OverloadedStrings, Rank2Types #-}
 module GLUT where
 
+import Cache
 import CommonAL (SoundInfo(..))
 import qualified CommonAL as CommonAL
 import CommonGL
@@ -133,9 +134,10 @@ initGraphics (GLUTArgs title) init = do
         resourceDir = "."
         aspect = realToFrac width / realToFrac height
     GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
-    cache <- newCache height
+    cache <- newCache
     let internals = GLUTInternals {
-                inCache = cache
+                inCache    = cache,
+                inScreenHt = height
             }
     (updateFrame, drawFrame, touched) <- init width height resourceDir resourceDir internals
 
@@ -222,7 +224,8 @@ instance Platform GLUT where
             gaTitle :: String
         }
     data Internals GLUT = GLUTInternals {
-            inCache :: Cache
+            inCache    :: Cache,
+            inScreenHt :: Int
         }
     data Sprite GLUT = Sprite {
             spKey   :: Key,
@@ -310,7 +313,8 @@ instance Platform GLUT where
                                                             [ColorBuffer']
                                                             Nearest
                         else Nothing
-                liftIO $ writeCache cache key $ offscreen rect (ccScreenHt cache) multisample draw
+                    screenHt = inScreenHt (ssInternals ss)
+                liftIO $ writeCache cache key $ offscreen rect screenHt multisample draw
                 return ()
             draw = do
                 ss <- ask
