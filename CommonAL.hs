@@ -76,8 +76,11 @@ unfoldM fetch = go []
             Just a -> go (a:acc)
             Nothing -> return $ reverse acc
 
-audioThread :: Device -> [(Behavior [IORef SoundInfo], ALfloat)] -> IO ()
-audioThread device bSounds = do
+alOpenDevice :: IO (Maybe Device)
+alOpenDevice = openDevice Nothing
+
+alAudioThread :: Device -> [(Behavior [IORef SoundInfo], ALfloat)] -> IO ()
+alAudioThread device bSounds = do
     Just context <- createContext device []
     currentContext $= Just context
 

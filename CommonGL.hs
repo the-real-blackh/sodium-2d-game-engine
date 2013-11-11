@@ -1,6 +1,8 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, MultiParamTypeClasses,
+        OverloadedStrings #-}
 module CommonGL where
 
+import CommonAL
 import Geometry
 import Orientation
 import Platform
@@ -265,11 +267,22 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
     (time, sendTime) <- sync $ newBehavior 0
     (realTime, sendRealTime) <- sync $ newBehavior 0
     rng <- newStdGen
-    bSprite <- sync $ game eMouse time rng
+    (bSprite, bMusic, eEffects) <- sync $ game eMouse time rng
     spriteRef <- newIORef =<< sync (sample bSprite)
     kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
 
     let kill = kill1
+
+    -- Distribute the effects alternately between two threads so two effects
+    -- can play simultaneously.
+    Just device <- alOpenDevice
+    (bEffects1, bEffects2, bMusic') <- sync $ do
+        (eEffects1, eEffects2) <- twoStreams eEffects
+        b1 <- hold [] $ (:[]) <$> eEffects1
+        b2 <- hold [] $ (:[]) <$> eEffects2
+        bMusic' <- removeDuplicateMusic bMusic
+        return (b1, b2, bMusic')
+    audioThread device [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
 
     t0 <- getCurrentTime
     tLastEndRef <- newIORef =<< getTime t0
@@ -314,4 +327,21 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
 
     updateFrame
     return (updateFrame, drawFrame, touched)
+
+-- | Split the event into two alternating streams so it is possible to have two
+-- effects playing at the same time.
+twoStreams :: Event a -> Reactive (Event a, Event a)
+twoStreams e = do
+    ePair <- collectE (\a which ->
+        (if which then (Just a, Nothing)
+                  else (Nothing, Just a), not which)) False e
+    let e1 = filterJust $ fst <$> ePair
+        e2 = filterJust $ snd <$> ePair
+    return (e1, e2)
+
+removeDuplicateMusic :: Behavior (Text, [Sound p]) -> Reactive (Behavior [Sound p])
+removeDuplicateMusic b = do
+    delta <- collectE (\(new, music) old ->
+       (if new /= old then Just music else Nothing, new)) "" (value b)
+    hold [] $ filterJust delta
 

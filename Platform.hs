@@ -23,7 +23,11 @@ deriving instance Show (Touch p) => Show (MouseEvent p)
 type Game p = Event (MouseEvent p)
            -> Behaviour Double
            -> StdGen
-           -> Reactive (Behaviour (Sprite p))
+           -> Reactive (
+                  Behaviour (Sprite p),
+                  Behavior (Text, [Sound p]),
+                  Event (Sound p)
+              )
 
 data TouchPhase = TouchBegan | TouchMoved | TouchEnded | TouchCancelled deriving (Eq, Ord, Show, Enum)
 

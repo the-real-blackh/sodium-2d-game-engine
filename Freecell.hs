@@ -1,4 +1,4 @@
-{-# LANGUAGE DoRec #-}
+{-# LANGUAGE DoRec, OverloadedStrings #-}
 module Freecell (freecell) where
 
 import Geometry
@@ -16,6 +16,7 @@ import System.Random
 import System.FilePath
 import Data.Array.IArray as A
 import Data.Array.ST
+import Data.Text (Text)
 
 data Suit  = Spades | Clubs | Diamonds | Hearts
              deriving (Eq, Ord, Show, Enum, Bounded)
@@ -335,7 +336,11 @@ game :: Platform p =>
      -> Event (MouseEvent p)
      -> Behaviour Double
      -> StdGen
-     -> Reactive (Behaviour (Sprite p))
+     -> Reactive (
+            Behaviour (Sprite p),
+            Behavior (Text, [Sound p]),
+            Event (Sound p)
+        )
 game draw emptySpace eMouse time rng = do
     let stackCards =
             let (cards, _) = shuffle rng [minBound..maxBound]
@@ -357,7 +362,11 @@ game draw emptySpace eMouse time rng = do
         -- this is equivalent to temporarily putting all but one of them in cells.
         let emptySpaces = foldr1 (\x y -> (+) <$> x <*> y) ceEmptySpaces
         (drSprites, eDrop) <- dragger draw eMouse (foldr1 merge (stDrags ++ ceDrags ++ [grDrag]))
-    return $ mconcat . concat <$> sequenceA (stSprites ++ ceSprites ++ [grSprites] ++ [drSprites])
+    return (
+        mconcat . concat <$> sequenceA (stSprites ++ ceSprites ++ [grSprites] ++ [drSprites]),
+        pure ("", []),
+        never
+      )
 
 shuffle :: StdGen -> [Card] -> ([Card], StdGen)
 shuffle rng cards =

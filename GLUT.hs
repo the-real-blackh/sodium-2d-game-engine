@@ -270,7 +270,7 @@ instance Platform GLUT where
         runReaderT action ss
         when flip $ flipCache (inCache internals)
 
-    audioThread device bSounds = CommonAL.audioThread device $
+    audioThread device bSounds = CommonAL.alAudioThread device $
         (\(b, gain) -> (map (\(Sound si) -> si) <$> b, realToFrac gain)) <$> bSounds
 
     -- Rotate the sprite 90 degrees clockwise
