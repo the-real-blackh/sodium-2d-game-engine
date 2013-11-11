@@ -1,7 +1,7 @@
 <html>
 
 <head>
-<title>Hello</title>
+<title>Freecell</title>
 <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
 
 <script type="text/javascript" src="gl-matrix-min.js"></script>
@@ -44,7 +44,6 @@
     function initGL(canvas) {
         canvas.width = document.documentElement.clientWidth;
         canvas.height = document.documentElement.clientHeight;
-        var gl;
         try {
             gl = canvas.getContext("webgl");
         }
@@ -61,24 +60,6 @@
         gl.viewportWidth = canvas.width;
         gl.viewportHeight = canvas.height;
 
-        return gl;
-    }
-
-    var pos;
-    var pMatrixUniform;
-    var mvMatrixUniform;
-    var pMatrix = mat4.create();
-    var mvMatrix = mat4.create();
-    var samplerUniform;
-    var vShader;
-    var fShader;
-    var program;
-    var texCoordAttr;
-    var texture;
-    var texCoords;
-
-    function squareBuffer(gl)
-    {
         vShader = createShaderFromScriptElement(gl, "shader-vs");
         fShader = createShaderFromScriptElement(gl, "shader-fs");
         var program = createProgram(gl, [vShader, fShader]);
@@ -91,13 +72,6 @@
         texCoordAttr = gl.getAttribLocation(program, "aTextureCoord");
         gl.enableVertexAttribArray(texCoordAttr);
         samplerUniform = gl.getUniformLocation(program, "uSampler");
-
-        texture = gl.createTexture();
-        texture.image = new Image();
-        texture.image.onload = function() {
-            handleLoadedTexture(gl,texture)
-        }
-        texture.image.src = "cat.png";
 
         texCoords = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
@@ -113,10 +87,10 @@
         texCoords.numItems = 4;
 
         mat4.identity(pMatrix);
-        mat4.scale(pMatrix, pMatrix, [gl.viewportHeight / gl.viewportWidth, 1, 1]);
+        mat4.scale(pMatrix, pMatrix, [0.001 * gl.viewportHeight / gl.viewportWidth, 0.001, 1]);
 
-        var buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        squareBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareBuf);
         var vertices = [
             -1.0,  1.0,  0.0,
              1.0,  1.0,  0.0,
@@ -124,39 +98,69 @@
              1.0, -1.0,  0.0
         ];
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-        buf.itemSize = 3;
-        buf.numItems = 4;
-        return buf;
+        squareBuf.itemSize = 3;
+        squareBuf.numItems = 4;
+
+        return gl;
     }
 
-    function handleLoadedTexture(gl,texture) {
-        gl.bindTexture(gl.TEXTURE_2D, texture);
+    var gl;
+    var pos;
+    var pMatrixUniform;
+    var mvMatrixUniform;
+    var pMatrix = mat4.create();
+    var mvMatrix = mat4.create();
+    var samplerUniform;
+    var vShader;
+    var fShader;
+    var program;
+    var texCoordAttr;
+    var texCoords;
+
+    function loadImage(fn)
+    {
+        var tex = gl.createTexture();
+        tex.image = new Image();
+        tex.image.onload = function() {
+            handleLoadedTexture(gl,tex)
+        }
+        tex.image.src = fn;
+        return tex;
+    }
+
+    function handleLoadedTexture(gl,tex) {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex.image);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.bindTexture(gl.TEXTURE_2D, null);
     }
 
-    function drawShape(gl,buf)
+    function drawImage(tex, x, y, w, h)
     {
         mat4.identity(mvMatrix);
-        mat4.scale(mvMatrix, mvMatrix, [0.5, 0.5, 1]);
-        //mat4.translate(mvMatrix, [-0.25, 0.0, -0.25]);
+        mat4.translate(mvMatrix, mvMatrix, [x, y, 0]);
+        mat4.scale(mvMatrix, mvMatrix, [w, h, 1]);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
         gl.vertexAttribPointer(texCoordAttr, texCoords.itemSize, gl.FLOAT, false, 0, 0);
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.uniform1i(samplerUniform, 0);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareBuf);
         gl.enableVertexAttribArray(pos);
-        gl.vertexAttribPointer(pos, buf.itemSize, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(pos, squareBuf.itemSize, gl.FLOAT, false, 0, 0);
         gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
         gl.uniformMatrix4fv(mvMatrixUniform, false, mvMatrix);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, buf.numItems);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareBuf.numItems);
+    }
+
+    function destroyImage(tex)
+    {
+        //gl.deleteTexture(tex);
     }
 </script>
 

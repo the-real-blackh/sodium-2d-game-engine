@@ -111,15 +111,15 @@ data GLUT = GLUT
         resDraw :: GLfloat -> IO ()
     }
 
-instance Monoid (Sprite GLUT) where
-    mempty = Sprite NullKey ((0,0),(0,0)) Nothing $ return ()
-    Sprite ka ra ca a `mappend` Sprite kb rb cb b =
-        Sprite (ka `appendKey` kb) (ra `appendRect` rb) (ca `appendCache` cb) (a >> b)
-
 appendCache :: Maybe (ReaderT SpriteState IO ()) -> Maybe (ReaderT SpriteState IO ()) -> Maybe (ReaderT SpriteState IO ())
 appendCache (Just a)    (Just b) = Just (a >> b)
 appendCache ja@(Just _) _        = ja
 appendCache _           mb       = mb
+
+instance Monoid (Sprite GLUT) where
+    mempty = Sprite NullKey ((0,0),(0,0)) Nothing $ return ()
+    Sprite ka ra ca a `mappend` Sprite kb rb cb b =
+        Sprite (ka `appendKey` kb) (ra `appendRect` rb) (ca `appendCache` cb) (a >> b)
 
 frameRate :: Num a => a
 frameRate = 30

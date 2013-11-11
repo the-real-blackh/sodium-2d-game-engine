@@ -49,11 +49,6 @@ white = Color4 1 1 1 1
 grey :: Color4 GLfloat
 grey = Color4 0.5 0.5 0.5 1
 
-appendKey :: Key -> Key -> Key
-appendKey NullKey k = k
-appendKey k NullKey = k
-appendKey k1 k2 = CompositeKey k1 k2
-
 fi :: (Integral a, Num b) => a -> b
 fi = fromIntegral
 

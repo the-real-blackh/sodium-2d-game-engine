@@ -14,7 +14,6 @@ import Control.Monad
 import Data.IORef
 import Data.Map (Map)
 import qualified Data.Map as M
-import Graphics.Rendering.OpenGL as GL hiding (Triangle, Rect, translate, normal)
 
 
 data Cache args = Cache {
@@ -63,4 +62,3 @@ flipCache cache = do
             forM_ items $ \e -> eCleanup e
   where
     unTouch e = e { eTouched = False }
-

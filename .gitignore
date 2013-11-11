@@ -1,3 +1,6 @@
 *.hi
 *.o
+*.js_hi
+*.js_o
 freecell-glut
+freecell-webgl
