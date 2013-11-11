@@ -106,7 +106,6 @@ instance Platform WebGL where
             spDraw  :: ReaderT SpriteState IO ()
         }
     data Font WebGL = Font
-    data SoundDevice WebGL = SoundDevice
     data Sound WebGL = Sound
     type Touch WebGL = ()
 
@@ -181,7 +180,7 @@ instance Platform WebGL where
                     cache <- asks (inCache . ssInternals)
                     liftIO $ writeCache cache key $ do
                         putStrLn $ "loading "++path
-                        tex <- loadImage $ fromString path
+                        tex <- loadImage $ fromString $ resDir </> path
                         let draw' ((x,y),(w,h)) = drawImage tex x y w h
                             cleanup' = destroyImage tex
                         return (draw', cleanup')
@@ -221,7 +220,7 @@ instance Platform WebGL where
         runReaderT action ss
         when flip $ flipCache (inCache internals)
 
-    audioThread device bSounds = error "WebGL.audioThread undefined"
+    audioThread bSounds = error "WebGL.audioThread undefined"
     clockwiseSprite (Sprite key rect cache action) = error "WebGL.clockwiseSprite undefined"
     anticlockwiseSprite (Sprite key rect cache action) = error "WebGL.anticlockwiseSprite undefined"
     rotateSprite theta (Sprite key rect@((posX, posY), _) cache action) = error "WebGL.rotateSprite undefined"
