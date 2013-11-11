@@ -55,7 +55,6 @@ class (Monoid (Sprite p),
     data Internals p
     data Sprite p
     data Font p
-    data SoundDevice p
     data Sound p
     type Touch p
     engine :: Args p -> Game p -> IO ()
@@ -79,7 +78,7 @@ class (Monoid (Sprite p),
     shrink :: Coord -> Sprite p -> Sprite p
     preRunSprite :: Internals p -> Int -> Sprite p -> IO ()
     runSprite :: Internals p -> Int -> Sprite p -> Bool -> IO ()
-    audioThread :: SoundDevice p -> [(Behavior [Sound p], Float)] -> IO ()
+    audioThread :: [(Behavior [Sound p], Float)] -> IO ()
     -- Rotate the sprite 90 degrees clockwise
     clockwiseSprite :: Sprite p -> Sprite p
     -- Rotate the sprite 90 degrees anti-clockwise

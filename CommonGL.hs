@@ -2,7 +2,6 @@
         OverloadedStrings #-}
 module CommonGL where
 
-import CommonAL
 import Geometry
 import Orientation
 import Platform
@@ -270,14 +269,13 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
 
     -- Distribute the effects alternately between two threads so two effects
     -- can play simultaneously.
-    Just device <- alOpenDevice
     (bEffects1, bEffects2, bMusic') <- sync $ do
         (eEffects1, eEffects2) <- twoStreams eEffects
         b1 <- hold [] $ (:[]) <$> eEffects1
         b2 <- hold [] $ (:[]) <$> eEffects2
         bMusic' <- removeDuplicateMusic bMusic
         return (b1, b2, bMusic')
-    audioThread device [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
+    audioThread [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
 
     t0 <- getCurrentTime
     tLastEndRef <- newIORef =<< getTime t0

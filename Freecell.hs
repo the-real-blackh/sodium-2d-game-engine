@@ -36,7 +36,7 @@ instance Bounded Card where
     maxBound = Card maxBound maxBound 
 
 cardFn :: Card -> FilePath
-cardFn (Card v s) = "cards" ++ [pathSeparator] ++ suitName s ++ valueName v ++ ".png"
+cardFn (Card v s) = suitName s ++ valueName v ++ ".png"
   where
     suitName Spades = "s"
     suitName Clubs = "c"
@@ -56,14 +56,14 @@ cardFn (Card v s) = "cards" ++ [pathSeparator] ++ suitName s ++ valueName v ++ "
     valueName Queen = "q"
     valueName King = "k"
 
-freecell :: Platform p => IO (Game p)
-freecell = do
+freecell :: Platform p => FilePath -> IO (Game p)
+freecell resPath = do
     cards <- forM [minBound..maxBound] $ \card -> do
-        i <- image "cards" (cardFn card)
+        i <- image resPath (cardFn card)
         return (card, i)
     let cardsM = M.fromList cards
         draw card = fromJust $ M.lookup card cardsM
-    emptySpace <- image "cards" "cards/empty-space.png"
+    emptySpace <- image resPath "empty-space.png"
     return $ game draw emptySpace
 
 noOfStacks :: Int

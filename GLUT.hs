@@ -167,7 +167,7 @@ instance Platform GLUT where
                     liftIO $ writeCache cache key $ do
                         putStrLn $ "loading "++path
                         when simulateIOSSpeed $ liftIO $ threadDelay 600
-                        ti <- loadTexture path False
+                        ti <- loadTexture (resDir </> path) False
                         to <- createTexture ti
                         let draw' (_, brightness) = do
                                 color $ Color4 1 1 1 brightness
@@ -203,6 +203,7 @@ instance Platform GLUT where
             GL.translate $ Vector3 (realToFrac vx) (realToFrac vy) (0 :: GLfloat)
             runReaderT action r
     createFont resPath ycorr = Font <$> FTGL.createPolygonFont resPath <*> pure ycorr 
+    {-
     uncachedLabel rect@((posX, posY), _) (Color4 r g b _) text = Sprite (TextKey text) rect Nothing $ do
         when simulateIOSSpeed $ liftIO $ threadDelay 10000
         ft <- asks ssFont
@@ -211,6 +212,7 @@ instance Platform GLUT where
         liftIO $ preservingMatrix $ do
             GL.translate $ Vector3 (realToFrac posX) (realToFrac posY) (0 :: GLfloat)
             glLabel (ftFont ft) (ftYCorr ft) rect (Color4 r g b brightness) text
+            -}
     key k s = s { spKey = k }
     keyOf d = spKey $ d ((0,0),(0,0))
     setBoundingBox r s = s { spRect = r }
@@ -242,14 +244,14 @@ instance Platform GLUT where
         in Sprite key rect (cache1 `appendCache` Just cache2) draw
     fade brightness (Sprite key rect cache action) = Sprite key rect cache $ do
         ss <- ask
-        liftIO $ runReaderT action (ss { ssBrightness = ssBrightness ss * brightness })
+        liftIO $ runReaderT action (ss { ssBrightness = ssBrightness ss * realToFrac brightness })
     shrink factor (Sprite key rect@((posX,posY),_) cache action) = Sprite key rect cache $ do
         ss <- ask
         let px = realToFrac posX
             py = realToFrac posY
         liftIO $ preservingMatrix $ do
             GL.translate $ Vector3 px py (0 :: GLfloat)
-            GL.scale factor factor 1
+            GL.scale (realToFrac factor) (realToFrac factor) (1 :: GLfloat)
             GL.translate $ Vector3 (-px) (-py) (0 :: GLfloat)
             runReaderT action ss
     preRunSprite internals brightness (Sprite _ _ mCache action) = do
@@ -270,8 +272,10 @@ instance Platform GLUT where
         runReaderT action ss
         when flip $ flipCache (inCache internals)
 
-    audioThread device bSounds = CommonAL.alAudioThread device $
-        (\(b, gain) -> (map (\(Sound si) -> si) <$> b, realToFrac gain)) <$> bSounds
+    audioThread bSounds = do
+        Just device <- CommonAL.alOpenDevice
+        CommonAL.alAudioThread device $
+            (\(b, gain) -> (map (\(Sound si) -> si) <$> b, realToFrac gain)) <$> bSounds
 
     -- Rotate the sprite 90 degrees clockwise
     clockwiseSprite (Sprite key rect cache action) = Sprite key (clockwiseRect rect) cache $ do
@@ -293,7 +297,7 @@ instance Platform GLUT where
             py = realToFrac posY
         liftIO $ preservingMatrix $ do
             GL.translate $ Vector3 px py (0 :: GLfloat)
-            GL.rotate theta normal
+            GL.rotate (realToFrac theta) normal
             GL.translate $ Vector3 (-px) (-py) (0 :: GLfloat)
             runReaderT action ss
 

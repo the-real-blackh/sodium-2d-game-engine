@@ -4,5 +4,5 @@ import WebGL
 
 
 main = do
-    game <- freecell
+    game <- freecell "cards"
     engine WebGLArgs game
