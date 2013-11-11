@@ -8,6 +8,7 @@ import Geometry
 import Platform
 
 import Control.Applicative
+import Control.Concurrent
 import Control.Exception
 import Control.Monad.Reader
 import qualified Data.ByteString.Char8 as C
@@ -17,8 +18,9 @@ import Data.String
 import qualified Data.Text as T
 import Data.Time.Clock
 import FRP.Sodium
-import GHCJS.Types
 import GHCJS.Foreign
+import GHCJS.Types
+import GHCJS.Marshal
 import System.FilePath
 import System.Random (newStdGen)
 
@@ -38,11 +40,18 @@ instance Monoid (Sprite WebGL) where
 data GL_
 type GL = JSRef GL_
 
-foreign import javascript unsafe "initGL($1)"
-    initGL :: Canvas -> IO GL
+foreign import javascript unsafe "initGL($1,$2,$3,$4)"
+    initGL :: Canvas
+           -> JSFun (JSRef Float -> JSRef Float -> IO ())
+           -> JSFun (JSRef Float -> JSRef Float -> IO ())
+           -> JSFun (JSRef Float -> JSRef Float -> IO ())
+           -> IO GL
 
-foreign import javascript unsafe "$1.height"
-    canvasHeight :: Canvas -> IO Int
+foreign import javascript unsafe "document.documentElement.clientWidth"
+    clientWidth :: IO Float
+
+foreign import javascript unsafe "document.documentElement.clientHeight"
+    clientHeight :: IO Float
 
 data Canvas_
 type Canvas = JSRef Canvas_
@@ -110,23 +119,40 @@ instance Platform WebGL where
     type Touch WebGL = ()
 
     engine _ game = do
-        putStrLn "engine"
         canvas <- getElementById "mycanvas"
-        putStrLn "engine 1"
-        gl <- initGL canvas
-        putStrLn "engine 2"
-        initViewPort gl
-        putStrLn "engine 3"
 
-        height <- canvasHeight canvas
+        width <- clientWidth
+        height <- clientHeight
+        let xscale  = 2000 * width / height
+            iHeight = round height
+
+        (eMouse, sendMouse) <- sync newEvent
+
+        md <- asyncCallback2 True $ \jx jy -> do
+            Just xx <- fromJSRef jx :: IO (Maybe Float)
+            Just yy <- fromJSRef jy :: IO (Maybe Float)
+            let x = xscale * (xx / width - 0.5)
+                y = (-2000) * (yy / height - 0.5)
+            sync $ sendMouse $ MouseDown () (x,y)
+        mu <- asyncCallback2 True $ \jx jy -> do
+            Just xx <- fromJSRef jx :: IO (Maybe Float)
+            Just yy <- fromJSRef jy :: IO (Maybe Float)
+            let x = xscale * (xx / width - 0.5)
+                y = (-2000) * (yy / height - 0.5)
+            sync $ sendMouse $ MouseUp () (x,y)
+        mm <- asyncCallback2 True $ \jx jy -> do
+            Just xx <- fromJSRef jx :: IO (Maybe Float)
+            Just yy <- fromJSRef jy :: IO (Maybe Float)
+            let x = xscale * (xx / width - 0.5)
+                y = (-2000) * (yy / height - 0.5)
+            sync $ sendMouse $ MouseMove () (x,y)
+        gl <- initGL canvas md mu mm
+        initViewPort gl
 
         t0 <- getCurrentTime
         tLastEndRef <- newIORef =<< getTime t0
         timeLostRef <- newIORef 0
         tLastGC <- newIORef 0
-
-        putStrLn "engine 4"
-        let eMouse = never
 
         (time, sendTime) <- sync $ newBehavior 0
         (realTime, sendRealTime) <- sync $ newBehavior 0
@@ -140,7 +166,14 @@ instance Platform WebGL where
                     inCache    = cache
                 }
 
-        putStrLn "animate"
+        -- Keep callbacks alive
+        forkIO $ do
+            threadDelay maxBound
+            kill
+            freeCallback md
+            freeCallback mu
+            freeCallback mm
+
         animate $ do
 
             t <- readIORef tLastEndRef
@@ -149,7 +182,7 @@ instance Platform WebGL where
                 sendTime (t - lost)
                 sendRealTime t
             sprite <- readIORef spriteRef
-            preRunSprite internals height sprite
+            preRunSprite internals iHeight sprite
             tEnd <- getTime t0
             let lost = tEnd - t
             when (lost >= 0.1) $ do
@@ -165,7 +198,7 @@ instance Platform WebGL where
             clearColor gl 0 0 0 1
             clear gl
             sprite <- readIORef spriteRef
-            runSprite internals height sprite True
+            runSprite internals iHeight sprite True
             tEnd <- getTime t0
             writeIORef tLastEndRef tEnd
             _ <- evaluate kill
@@ -179,7 +212,7 @@ instance Platform WebGL where
             let cacheIt = Just $ do
                     cache <- asks (inCache . ssInternals)
                     liftIO $ writeCache cache key $ do
-                        putStrLn $ "loading "++path
+                        --putStrLn $ "loading "++path
                         tex <- loadImage $ fromString $ resDir </> path
                         let draw' ((x,y),(w,h)) = drawImage tex x y w h
                             cleanup' = destroyImage tex

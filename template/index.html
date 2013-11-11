@@ -41,7 +41,7 @@
 
 <script type="text/javascript">
 
-    function initGL(canvas) {
+    function initGL(canvas, handleMouseDown, handleMouseUp, handleMouseMove) {
         canvas.width = document.documentElement.clientWidth;
         canvas.height = document.documentElement.clientHeight;
         try {
@@ -101,6 +101,10 @@
         squareBuf.itemSize = 3;
         squareBuf.numItems = 4;
 
+        canvas.onmousedown = function(event) { handleMouseDown(event.clientX, event.clientY); }
+        document.onmouseup = function(event) { handleMouseUp(event.clientX, event.clientY); }
+        document.onmousemove = function(event) { handleMouseMove(event.clientX, event.clientY); }
+
         return gl;
     }
 
@@ -132,8 +136,8 @@
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex.image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.bindTexture(gl.TEXTURE_2D, null);
     }
 
@@ -160,7 +164,7 @@
 
     function destroyImage(tex)
     {
-        //gl.deleteTexture(tex);
+        gl.deleteTexture(tex);
     }
 </script>
 
