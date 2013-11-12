@@ -86,7 +86,7 @@ foreign import javascript unsafe "drawImage"
 foreign import javascript unsafe "destroyImage"
     destroyImage :: Texture -> IO ()
 
-framesPerSecond = 10
+framesPerSecond = 5
 
 animate :: IO () -> IO ()
 animate drawScene = do
@@ -195,6 +195,7 @@ instance Platform WebGL where
         animate $ do
 
             t <- readIORef tLastEndRef
+            print t
             lost <- readIORef timeLostRef
             iHeight <- sync $ do
                 sendTime (t - lost)

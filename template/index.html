@@ -48,6 +48,7 @@
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
         mat4.identity(pMatrix);
         mat4.scale(pMatrix, pMatrix, [0.001 * height / width, 0.001, 1]);
+        gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
     }
 
     function initGL(canvas, handleMouseDown, handleMouseUp, handleMouseMove) {
@@ -145,23 +146,28 @@
         gl.bindTexture(gl.TEXTURE_2D, null);
     }
 
-    function drawImage(tex, x, y, w, h)
+    function prepareImage()
     {
-        mat4.identity(mvMatrix);
-        mat4.translate(mvMatrix, mvMatrix, [x, y, 0]);
-        mat4.scale(mvMatrix, mvMatrix, [w, h, 1]);
-
         gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
         gl.vertexAttribPointer(texCoordAttr, texCoords.itemSize, gl.FLOAT, false, 0, 0);
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.uniform1i(samplerUniform, 0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, squareBuf);
         gl.enableVertexAttribArray(pos);
         gl.vertexAttribPointer(pos, squareBuf.itemSize, gl.FLOAT, false, 0, 0);
-        gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
+    }
+
+    function drawImage(tex, x, y, w, h)
+    {
+        prepareImage();
+
+        mat4.identity(mvMatrix);
+        mat4.translate(mvMatrix, mvMatrix, [x, y, 0]);
+        mat4.scale(mvMatrix, mvMatrix, [w, h, 1]);
+
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.uniform1i(samplerUniform, 0);
         gl.uniformMatrix4fv(mvMatrixUniform, false, mvMatrix);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareBuf.numItems);
     }
