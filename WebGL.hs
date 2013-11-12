@@ -86,13 +86,16 @@ foreign import javascript unsafe "drawImage"
 foreign import javascript unsafe "destroyImage"
     destroyImage :: Texture -> IO ()
 
+framesPerSecond = 10
+
 animate :: IO () -> IO ()
 animate drawScene = do
     rec
         let tick = do
-                requestAnimFrame tick'
                 drawScene
-        tick' <- syncCallback True False tick
+                threadDelay (1000000 `div` framesPerSecond)
+                requestAnimFrame tick'
+        tick' <- asyncCallback True tick
     tick
 
 data SpriteState = SpriteState {

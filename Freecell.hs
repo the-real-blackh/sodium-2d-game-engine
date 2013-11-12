@@ -72,11 +72,15 @@ noOfStacks = 8
 noOfCells :: Int
 noOfCells = 4
 
-cardSize :: Vector
-cardSize = (100,150)
+cardSize :: Coord -> Vector
+cardSize aspect = (90 * aspect, 135 * aspect)
 
-overlapY :: Coord
-overlapY = 70
+maxCardsPerStack = 14
+
+overlapY :: Coord -> Coord
+overlapY aspect = (stackTop aspect - ((-1000) + topMargin + cardHeight)) / (maxCardsPerStack - 1)
+  where
+    (_, cardHeight) = cardSize aspect
 
 data Location = Stack Int | Cell Int | Grave deriving (Eq, Show)
 
@@ -104,20 +108,32 @@ follows one@(Card v1 _) two@(Card v2 _) = isRed one /= isRed two && (v1 /= Ace &
     isRed (Card _ suit) = suit == Hearts || suit == Diamonds
 
 xExtent :: Coord -> Coord
-xExtent aspect = 900 * aspect
+xExtent aspect = 1000*aspect - leftMargin aspect - cardWidth
+  where
+    (cardWidth, _) = cardSize aspect
 
 cardSpacing :: Coord -> Coord
-cardSpacing aspect = (2*xExtent aspect-cardWidth) / fromIntegral (noOfStacks-1)
+cardSpacing aspect = 2*xExtent aspect / fromIntegral (noOfStacks-1)
   where
-    (cardWidth, _) = cardSize
+    (cardWidth, _) = cardSize aspect
 
 cardSpacingNarrow :: Coord -> Coord
 cardSpacingNarrow aspect = cardSpacing aspect * 0.9
 
-topRow :: Coord
-topRow = 1000 - 50 - cardHeight
+topMargin :: Coord
+topMargin = 50
+
+leftMargin :: Coord -> Coord
+leftMargin aspect = topMargin * aspect
+
+topRow :: Coord -> Coord
+topRow aspect = 1000 - topMargin - cardHeight
   where
-    (cardWidth, cardHeight) = cardSize
+    (cardWidth, cardHeight) = cardSize aspect
+
+stackTop :: Coord -> Coord
+stackTop aspect = topRow aspect - cardHeight * 2.5
+  where (_, cardHeight) = cardSize aspect
 
 -- | The vertical stacks of cards, where cards can only be added if they're
 -- descending numbers and alternating red-black.
@@ -127,33 +143,38 @@ stack :: Platform p =>
       -> Event (MouseEvent p) -> [Card] -> Location -> Behavior Int -> Event [Card]
       -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch)
 stack aspect draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
-    let (cardWidth, cardHeight) = cardSize
-        orig = (\aspect -> (
-                (-xExtent aspect) + cardWidth*0.5 + fromIntegral ix * cardSpacing aspect,
-                300
-            )) <$> aspect
-        positions orig = iterate (\(x, y) -> (x, y-overlapY)) orig
+    let orig aspect =
+            let (cardWidth, cardHeight) = cardSize aspect
+            in  (
+                    (-xExtent aspect) + fromIntegral ix * cardSpacing aspect,
+                    stackTop aspect
+                )
+        positions aspect = iterate (\(x, y) -> (x, y-overlapY aspect)) (orig aspect)
     rec
         cards <- hold initCards (eRemoveCards `merge` eAddCards)
         let eAddCards = snapshotWith (\newCards cards -> cards ++ newCards) eDrop cards
-            eMouseSelection = filterJust $ snapshotWith (\mev (cards, orig@(origX, origY)) ->
-                    case mev of
+            eMouseSelection = filterJust $ snapshotWith (\mev (cards, aspect) ->
+                    let (cardWidth, cardHeight) = cardSize aspect
+                        (origX, origY) = orig aspect
+                    in  case mev of
                         MouseDown _ pt@(x, y) | x >= origX - cardWidth && x <= origX + cardWidth ->
                             let n = length cards
-                                bottomY = (origY - cardHeight) - overlapY * fromIntegral (n-1) 
-                                ix = (length cards - 1) `min` floor (((origY + cardHeight) - y) / overlapY)
+                                bottomY = (origY - cardHeight) - overlapY aspect * fromIntegral (n-1) 
+                                ix = (length cards - 1) `min` floor (((origY + cardHeight) - y) / overlapY aspect)
                                 (left, taken) = splitAt ix cards
                             in  if ix >= 0 && y >= bottomY
-                                    then Just (left, Bunch (positions orig !! ix) pt taken loc)
+                                    then Just (left, Bunch (positions aspect !! ix) pt taken loc)
                                     else Nothing
                         _ -> Nothing
-                ) eMouse (liftA2 (,) cards orig)
+                ) eMouse (liftA2 (,) cards aspect)
             eRemoveCards = fst <$> eMouseSelection   -- Cards left over when we drag
             eDrag        = snd <$> eMouseSelection   -- Cards removed when we drag
-    let sprites = zipWith (\pos card -> draw card (pos, cardSize)) <$> fmap positions orig <*> cards
-        dest = (\cards freeSpaces orig -> Destination {
+    let sprites = (\cards aspect ->
+                        zipWith (\pos card -> draw card (pos, cardSize aspect)) (positions aspect) cards
+                  ) <$> cards <*> aspect
+        dest = (\cards freeSpaces aspect -> Destination {
                     deLocation = loc,
-                    deDropZone = (orig `minus` (0, fromIntegral (length cards) * overlapY), cardSize),
+                    deDropZone = (orig aspect `minus` (0, fromIntegral (length cards) * overlapY aspect), cardSize aspect),
                     deMayDrop = \newCards ->
                         validSequence newCards &&
                         -- You get one card for free, but there must be free cells for any
@@ -163,7 +184,7 @@ stack aspect draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
                             [] -> True
                             _  -> last cards `follows` head newCards
                 }
-            ) <$> cards <*> freeSpaces <*> orig
+            ) <$> cards <*> freeSpaces <*> aspect
     return (sprites, dest, eDrag)
 
 -- | The "free cells" where cards can be temporarily put.
@@ -174,30 +195,30 @@ cell :: Platform p =>
      -> Event (MouseEvent p) -> Location -> Event [Card]
      -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch, Behavior Int)
 cell aspect draw emptySpace eMouse loc@(Cell ix) eDrop = do
-    let (cardWidth, cardHeight) = cardSize
-        orig = flip fmap aspect $ \aspect ->
+    let orig aspect =
             let narrow = cardSpacingNarrow aspect
-            in  ((-xExtent aspect) + cardWidth*0.5 + fromIntegral ix * narrow, topRow)
-        rect = (, cardSize) <$> orig
+                (cardWidth, _) = cardSize aspect
+            in  ((-xExtent aspect) + fromIntegral ix * narrow, topRow aspect)
+        rect aspect = (orig aspect, cardSize aspect)
     rec
         mCard <- hold Nothing $ eRemove `merge` (Just . head <$> eDrop)
-        let eMouseSelection = filterJust $ snapshotWith (\mev (mCard, rect) ->
+        let eMouseSelection = filterJust $ snapshotWith (\mev (mCard, aspect) ->
                     case (mev, mCard) of
-                        (MouseDown _ pt, Just card) | pt `inside` rect ->
-                            Just (Nothing, Bunch (fst rect) pt [card] loc)
+                        (MouseDown _ pt, Just card) | pt `inside` rect aspect ->
+                            Just (Nothing, Bunch (fst $ rect aspect) pt [card] loc)
                         _ -> Nothing
-                ) eMouse (liftA2 (,) mCard rect)
+                ) eMouse (liftA2 (,) mCard aspect)
             eRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
-    let sprites = (\mCard orig -> [case mCard of
-                                       Just card -> draw card (orig, cardSize)
-                                       Nothing   -> emptySpace (orig, cardSize)]
-                  ) <$> mCard <*> orig
-        dest = (\mCard rect -> Destination {
+    let sprites = (\mCard aspect -> [case mCard of
+                                       Just card -> draw card (orig aspect, cardSize aspect)
+                                       Nothing   -> emptySpace (orig aspect, cardSize aspect)]
+                  ) <$> mCard <*> aspect
+        dest = (\mCard aspect -> Destination {
                 deLocation = loc,
-                deDropZone = rect,
+                deDropZone = rect aspect,
                 deMayDrop = \newCards -> length newCards == 1 && isNothing mCard
-            }) <$> mCard <*> rect
+            }) <$> mCard <*> aspect
         emptySpaces = (\c -> if isNothing c then 1 else 0) <$> mCard
     return (sprites, dest, eDrag, emptySpaces)
 
@@ -209,14 +230,15 @@ grave :: Platform p =>
       -> Event (MouseEvent p) -> Event [Card]
       -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch)
 grave aspect draw emptySpace eMouse eDrop = do
-    let xOf aspect ix = xExtent aspect - cardWidth*0.5 - cardSpacingNarrow aspect * fromIntegral (3-ix)
-        positions aspect = map (\ix -> (xOf aspect ix, topRow)) [0..3]
-        areas aspect = zip (positions aspect) (repeat cardSize)
-        (cardWidth, cardHeight) = cardSize
-        wholeRect aspect = (
-                               ((xOf aspect 0 + xOf aspect 3) * 0.5, topRow),
-                               ((cardSpacingNarrow aspect * 3 + cardWidth*2) * 0.5, cardHeight)
-                           ) 
+    let xOf aspect ix =    let (cardWidth, _) = cardSize aspect
+                           in  xExtent aspect - cardSpacingNarrow aspect * fromIntegral (3-ix)
+        positions aspect = map (\ix -> (xOf aspect ix, topRow aspect)) [0..3]
+        areas aspect = zip (positions aspect) (repeat $ cardSize aspect)
+        wholeRect aspect = let (cardWidth, cardHeight) = cardSize aspect
+                           in  (
+                                   ((xOf aspect 0 + xOf aspect 3) * 0.5, topRow aspect),
+                                   ((cardSpacingNarrow aspect * 3 + cardWidth*2) * 0.5, cardHeight)
+                               ) 
     rec
         let eDropModify = snapshotWith (\newCards slots ->
                     let newCard@(Card _ suit) = head newCards
@@ -242,9 +264,12 @@ grave aspect draw emptySpace eMouse eDrop = do
                 ) eMouse (liftA2 (,) slots aspect)
             eRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
-    let sprites = zipWith (\pos mSlot ->
-                maybe (emptySpace (pos, cardSize)) (\card -> draw card (pos, cardSize)) mSlot
-            ) <$> fmap positions aspect <*> slots
+    let sprites = (
+            \aspect slots ->
+                zipWith (\pos mSlot ->
+                         maybe (emptySpace (pos, cardSize aspect)) (\card -> draw card (pos, cardSize aspect)) mSlot)
+                    (positions aspect) slots
+            ) <$> aspect <*> slots
         dest = (\slots aspect -> Destination {
                 deLocation = Grave,
                 deDropZone = wholeRect aspect,
@@ -267,9 +292,10 @@ grave aspect draw emptySpace eMouse eDrop = do
 
 -- | Draw the cards while they're being dragged.
 dragger :: Platform p =>
-           (Card -> Drawable p)
+           Behavior Coord
+        -> (Card -> Drawable p)
         -> Event (MouseEvent p) -> Event Bunch -> Reactive (Behavior [Sprite p], Event (Point, Bunch))
-dragger draw eMouse eStartDrag = do
+dragger aspect draw eMouse eStartDrag = do
     dragPos <- hold (0,0) $ flip fmap eMouse $ \mev ->
         case mev of
             MouseUp   _ pt -> pt
@@ -283,13 +309,13 @@ dragger draw eMouse eStartDrag = do
                         (MouseUp _ pt, Just dragging) -> Just (cardPos pt dragging, dragging)
                         _                             -> Nothing
                 ) eMouse dragging
-    let sprites = drawDraggedCards <$> dragPos <*> dragging
+    let sprites = drawDraggedCards <$> dragPos <*> dragging <*> aspect
           where
-            drawDraggedCards pt (Just bunch) =
+            drawDraggedCards pt (Just bunch) aspect =
                 let cpos = cardPos pt bunch
-                    positions = iterate (\(x, y) -> (x, y-overlapY)) cpos
-                in  zipWith (\card pos -> draw card (pos, cardSize)) (buCards bunch) positions
-            drawDraggedCards _ Nothing = []
+                    positions = iterate (\(x, y) -> (x, y-overlapY aspect)) cpos
+                in  zipWith (\card pos -> draw card (pos, cardSize aspect)) (buCards bunch) positions
+            drawDraggedCards _ Nothing _ = []
     return (sprites, eDrop)
   where
     cardPos pt bunch = (pt `minus` buInitMousePos bunch) `plus` buInitOrig bunch
@@ -348,7 +374,7 @@ game draw emptySpace aspect eMouse time rng = do
         -- know this when we drop a stack of cards, because (the rules of the game say)
         -- this is equivalent to temporarily putting all but one of them in cells.
         let emptySpaces = foldr1 (\x y -> (+) <$> x <*> y) ceEmptySpaces
-        (drSprites, eDrop) <- dragger draw eMouse (foldr1 merge (stDrags ++ ceDrags ++ [grDrag]))
+        (drSprites, eDrop) <- dragger aspect draw eMouse (foldr1 merge (stDrags ++ ceDrags ++ [grDrag]))
     return (
         mconcat . concat <$> sequenceA (stSprites ++ ceSprites ++ [grSprites] ++ [drSprites]),
         pure ("", []),
