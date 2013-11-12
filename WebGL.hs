@@ -127,6 +127,7 @@ instance Platform WebGL where
         width0 <- windowWidth
         height0 <- windowHeight
         (viewport, sendViewport) <- sync $ newBehavior (width0, height0)
+        let aspect = uncurry (/) <$> viewport
 
         (eMouse, sendMouse) <- sync newEvent
 
@@ -170,7 +171,7 @@ instance Platform WebGL where
         (time, sendTime) <- sync $ newBehavior 0
         (realTime, sendRealTime) <- sync $ newBehavior 0
         rng <- newStdGen
-        (bSprite, bMusic, eEffects) <- sync $ game eMouse time rng
+        (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
         spriteRef <- newIORef =<< sync (sample bSprite)
         kill <- sync $ listen (updates bSprite) (writeIORef spriteRef)
 

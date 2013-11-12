@@ -1,4 +1,4 @@
-{-# LANGUAGE DoRec, OverloadedStrings #-}
+{-# LANGUAGE DoRec, OverloadedStrings, TupleSections #-}
 module Freecell (freecell) where
 
 import Geometry
@@ -56,7 +56,7 @@ cardFn (Card v s) = suitName s ++ valueName v ++ ".png"
     valueName Queen = "q"
     valueName King = "k"
 
-freecell :: Platform p => FilePath -> IO (Game p)
+freecell :: Platform p => FilePath -> IO (Behavior Coord -> Game p)
 freecell resPath = do
     cards <- forM [minBound..maxBound] $ \card -> do
         i <- image resPath (cardFn card)
@@ -75,7 +75,7 @@ noOfCells = 4
 cardSize :: Vector
 cardSize = (100,150)
 
-overlapY :: Float
+overlapY :: Coord
 overlapY = 70
 
 data Location = Stack Int | Cell Int | Grave deriving (Eq, Show)
@@ -103,64 +103,40 @@ follows one@(Card v1 _) two@(Card v2 _) = isRed one /= isRed two && (v1 /= Ace &
     isRed :: Card -> Bool
     isRed (Card _ suit) = suit == Hearts || suit == Diamonds
 
-cardSpacing :: Coord
-cardSpacing = (2000-cardWidth) / fromIntegral (noOfStacks-1)
+xExtent :: Coord -> Coord
+xExtent aspect = 900 * aspect
+
+cardSpacing :: Coord -> Coord
+cardSpacing aspect = (2*xExtent aspect-cardWidth) / fromIntegral (noOfStacks-1)
   where
     (cardWidth, _) = cardSize
 
-cardSpacingNarrow :: Coord
-cardSpacingNarrow = cardSpacing * 0.9
+cardSpacingNarrow :: Coord -> Coord
+cardSpacingNarrow aspect = cardSpacing aspect * 0.9
 
 topRow :: Coord
 topRow = 1000 - 50 - cardHeight
   where
     (cardWidth, cardHeight) = cardSize
 
-{-
-draw :: Point -> Card -> Sprite p
-draw pt (Card v s) = ((pt, cardSize), "cards" ++ [pathSeparator] ++ suitName s ++ valueName v ++ ".png")
-  where
-    suitName Spades = "s"
-    suitName Clubs = "c"
-    suitName Diamonds = "d"
-    suitName Hearts = "h"
-    valueName Ace = "1"
-    valueName Two = "2"
-    valueName Three = "3"
-    valueName Four = "4"
-    valueName Five = "5"
-    valueName Six = "6"
-    valueName Seven = "7"
-    valueName Eight = "8"
-    valueName Nine = "9"
-    valueName Ten = "10"
-    valueName Jack = "j"
-    valueName Queen = "q"
-    valueName King = "k"
--}
-
-{-
-emptySpace :: Point -> Sprite p
-emptySpace pt = ((pt, cardSize), "cards" ++ [pathSeparator] ++ "empty-space.png") 
--}
-
 -- | The vertical stacks of cards, where cards can only be added if they're
 -- descending numbers and alternating red-black.
 stack :: Platform p =>
-         (Card -> Drawable p)
+         Behavior Coord
+      -> (Card -> Drawable p)
       -> Event (MouseEvent p) -> [Card] -> Location -> Behavior Int -> Event [Card]
       -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch)
-stack draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
+stack aspect draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
     let (cardWidth, cardHeight) = cardSize
-        orig@(origX, origY) = (
-                (-1000) + cardWidth*0.5 + fromIntegral ix * cardSpacing,
+        orig = (\aspect -> (
+                (-xExtent aspect) + cardWidth*0.5 + fromIntegral ix * cardSpacing aspect,
                 300
-            )
-        positions = iterate (\(x, y) -> (x, y-overlapY)) orig
+            )) <$> aspect
+        positions orig = iterate (\(x, y) -> (x, y-overlapY)) orig
     rec
         cards <- hold initCards (eRemoveCards `merge` eAddCards)
         let eAddCards = snapshotWith (\newCards cards -> cards ++ newCards) eDrop cards
-            eMouseSelection = filterJust $ snapshotWith (\mev cards ->
+            eMouseSelection = filterJust $ snapshotWith (\mev (cards, orig@(origX, origY)) ->
                     case mev of
                         MouseDown _ pt@(x, y) | x >= origX - cardWidth && x <= origX + cardWidth ->
                             let n = length cards
@@ -168,14 +144,14 @@ stack draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
                                 ix = (length cards - 1) `min` floor (((origY + cardHeight) - y) / overlapY)
                                 (left, taken) = splitAt ix cards
                             in  if ix >= 0 && y >= bottomY
-                                    then Just (left, Bunch (positions !! ix) pt taken loc)
+                                    then Just (left, Bunch (positions orig !! ix) pt taken loc)
                                     else Nothing
                         _ -> Nothing
-                ) eMouse cards
+                ) eMouse (liftA2 (,) cards orig)
             eRemoveCards = fst <$> eMouseSelection   -- Cards left over when we drag
             eDrag        = snd <$> eMouseSelection   -- Cards removed when we drag
-    let sprites = zipWith (\pos card -> draw card (pos, cardSize)) positions <$> cards
-        dest = (\cards freeSpaces -> Destination {
+    let sprites = zipWith (\pos card -> draw card (pos, cardSize)) <$> fmap positions orig <*> cards
+        dest = (\cards freeSpaces orig -> Destination {
                     deLocation = loc,
                     deDropZone = (orig `minus` (0, fromIntegral (length cards) * overlapY), cardSize),
                     deMayDrop = \newCards ->
@@ -187,50 +163,60 @@ stack draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
                             [] -> True
                             _  -> last cards `follows` head newCards
                 }
-            ) <$> cards <*> freeSpaces
+            ) <$> cards <*> freeSpaces <*> orig
     return (sprites, dest, eDrag)
 
 -- | The "free cells" where cards can be temporarily put.
 cell :: Platform p =>
-        (Card -> Drawable p)
+        Behavior Float
+     -> (Card -> Drawable p)
      -> Drawable p
      -> Event (MouseEvent p) -> Location -> Event [Card]
      -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch, Behavior Int)
-cell draw emptySpace eMouse loc@(Cell ix) eDrop = do
+cell aspect draw emptySpace eMouse loc@(Cell ix) eDrop = do
     let (cardWidth, cardHeight) = cardSize
-        orig = ((-1000) + cardWidth*0.5 + fromIntegral ix * cardSpacingNarrow, topRow)
-        rect = (orig, cardSize)
+        orig = flip fmap aspect $ \aspect ->
+            let narrow = cardSpacingNarrow aspect
+            in  ((-xExtent aspect) + cardWidth*0.5 + fromIntegral ix * narrow, topRow)
+        rect = (, cardSize) <$> orig
     rec
         mCard <- hold Nothing $ eRemove `merge` (Just . head <$> eDrop)
-        let eMouseSelection = filterJust $ snapshotWith (\mev mCard ->
+        let eMouseSelection = filterJust $ snapshotWith (\mev (mCard, rect) ->
                     case (mev, mCard) of
                         (MouseDown _ pt, Just card) | pt `inside` rect ->
                             Just (Nothing, Bunch (fst rect) pt [card] loc)
                         _ -> Nothing
-                ) eMouse mCard
+                ) eMouse (liftA2 (,) mCard rect)
             eRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
-    let sprites = ((:[]) . maybe (emptySpace (orig, cardSize)) (\card -> draw card (orig, cardSize))) <$> mCard
-        dest = (\mCard -> Destination {
+    let sprites = (\mCard orig -> [case mCard of
+                                       Just card -> draw card (orig, cardSize)
+                                       Nothing   -> emptySpace (orig, cardSize)]
+                  ) <$> mCard <*> orig
+        dest = (\mCard rect -> Destination {
                 deLocation = loc,
                 deDropZone = rect,
                 deMayDrop = \newCards -> length newCards == 1 && isNothing mCard
-            }) <$> mCard
+            }) <$> mCard <*> rect
         emptySpaces = (\c -> if isNothing c then 1 else 0) <$> mCard
     return (sprites, dest, eDrag, emptySpaces)
 
 -- | The place where the cards end up at the top right, aces first.
 grave :: Platform p =>
-         (Card -> Drawable p)
+         Behavior Float
+      -> (Card -> Drawable p)
       -> Drawable p
       -> Event (MouseEvent p) -> Event [Card]
       -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch)
-grave draw emptySpace eMouse eDrop = do
-    let xOf ix = 1000 - cardWidth*0.5 - cardSpacingNarrow * fromIntegral (3-ix)
-        positions = map (\ix -> (xOf ix, topRow)) [0..3]
-        areas = zip positions (repeat cardSize)
+grave aspect draw emptySpace eMouse eDrop = do
+    let xOf aspect ix = xExtent aspect - cardWidth*0.5 - cardSpacingNarrow aspect * fromIntegral (3-ix)
+        positions aspect = map (\ix -> (xOf aspect ix, topRow)) [0..3]
+        areas aspect = zip (positions aspect) (repeat cardSize)
         (cardWidth, cardHeight) = cardSize
-        wholeRect = (((xOf 0 + xOf 3) * 0.5, topRow), ((cardSpacingNarrow * 3 + cardWidth*2) * 0.5, cardHeight))    
+        wholeRect aspect = (
+                               ((xOf aspect 0 + xOf aspect 3) * 0.5, topRow),
+                               ((cardSpacingNarrow aspect * 3 + cardWidth*2) * 0.5, cardHeight)
+                           ) 
     rec
         let eDropModify = snapshotWith (\newCards slots ->
                     let newCard@(Card _ suit) = head newCards
@@ -238,10 +224,10 @@ grave draw emptySpace eMouse eDrop = do
                     in  take ix slots ++ [Just newCard] ++ drop (ix+1) slots 
                 ) eDrop slots
         slots <- hold [Nothing, Nothing, Nothing, Nothing] (eDropModify `merge` eRemove)
-        let eMouseSelection = filterJust $ snapshotWith (\mev slots ->
+        let eMouseSelection = filterJust $ snapshotWith (\mev (slots, aspect) ->
                     case mev of
                         MouseDown _ pt ->
-                            let isIn = map (pt `inside`) areas
+                            let isIn = map (pt `inside`) (areas aspect)
                             in  case trueIxOf isIn of
                                     Just ix ->
                                         case slots !! ix of
@@ -249,19 +235,19 @@ grave draw emptySpace eMouse eDrop = do
                                                 let prevCard = if value == Ace then Nothing
                                                                                else Just (Card (pred value) suit)
                                                     slots' = take ix slots ++ [prevCard] ++ drop (ix+1) slots
-                                                in  Just (slots', Bunch (positions !! ix) pt [card] Grave)
+                                                in  Just (slots', Bunch (positions aspect !! ix) pt [card] Grave)
                                             Nothing -> Nothing
                                     Nothing -> Nothing
                         _ -> Nothing
-                ) eMouse slots
+                ) eMouse (liftA2 (,) slots aspect)
             eRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
     let sprites = zipWith (\pos mSlot ->
                 maybe (emptySpace (pos, cardSize)) (\card -> draw card (pos, cardSize)) mSlot
-            ) positions <$> slots
-        dest = (\slots -> Destination {
+            ) <$> fmap positions aspect <*> slots
+        dest = (\slots aspect -> Destination {
                 deLocation = Grave,
-                deDropZone = wholeRect,
+                deDropZone = wholeRect aspect,
                 deMayDrop = \newCards -> case newCards of
                     [card@(Card value suit)] ->
                         let ix = fromEnum suit
@@ -269,7 +255,7 @@ grave draw emptySpace eMouse eDrop = do
                                 Just (Card topValue _) -> value == succ topValue
                                 Nothing                -> value == Ace 
                     _                    -> False
-            }) <$> slots
+            }) <$> slots <*> aspect
     return (sprites, dest, eDrag)
   where
     -- Index of first true item in the list
@@ -333,6 +319,7 @@ distributeTo eWhere locations = flip map locations $ \thisLoc ->
 game :: Platform p =>
         (Card -> Drawable p)
      -> Drawable p
+     -> Behavior Coord  -- ^ Aspect ratio
      -> Event (MouseEvent p)
      -> Behaviour Double
      -> StdGen
@@ -341,7 +328,7 @@ game :: Platform p =>
             Behavior (Text, [Sound p]),
             Event (Sound p)
         )
-game draw emptySpace eMouse time rng = do
+game draw emptySpace aspect eMouse time rng = do
     let stackCards =
             let (cards, _) = shuffle rng [minBound..maxBound]
             in  toStacks noOfStacks cards
@@ -353,10 +340,10 @@ game draw emptySpace eMouse time rng = do
             ceDrops = eWhere `distributeTo` ceLocs
             grDrops = eWhere `distributeTo` [Grave]
         (stSprites, stDests, stDrags) <- unzip3 <$> forM (zip3 stLocs stackCards stDrops) (\(loc, cards, drop) ->
-            stack draw eMouse cards loc emptySpaces drop)
+            stack aspect draw eMouse cards loc emptySpaces drop)
         (ceSprites, ceDests, ceDrags, ceEmptySpaces) <- unzip4 <$> forM (zip ceLocs ceDrops) (\(loc, drop) ->
-            cell draw emptySpace eMouse loc drop)
-        (grSprites, grDest, grDrag) <- grave draw emptySpace eMouse (head grDrops)
+            cell aspect draw emptySpace eMouse loc drop)
+        (grSprites, grDest, grDrag) <- grave aspect draw emptySpace eMouse (head grDrops)
         -- The total number of empty spaces available in cells - 0 to 4. We need to
         -- know this when we drop a stack of cards, because (the rules of the game say)
         -- this is equivalent to temporarily putting all but one of them in cells.

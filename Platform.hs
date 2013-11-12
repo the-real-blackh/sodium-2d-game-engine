@@ -57,7 +57,7 @@ class (Monoid (Sprite p),
     data Font p
     data Sound p
     type Touch p
-    engine :: Args p -> Game p -> IO ()
+    engine :: Args p -> (Behavior Float -> Game p) -> IO ()
     nullDrawable :: Drawable p
     image :: FilePath -> FilePath -> IO (Drawable p)
     sound :: FilePath -> FilePath -> IO (Sound p)
