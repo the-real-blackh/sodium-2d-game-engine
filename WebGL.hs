@@ -41,35 +41,38 @@ data GL_
 type GL = JSRef GL_
 
 foreign import javascript unsafe "initGL($1,$2,$3,$4)"
-    initGL :: Canvas
+    initGL :: Element
            -> JSFun (JSRef Float -> JSRef Float -> IO ())
            -> JSFun (JSRef Float -> JSRef Float -> IO ())
            -> JSFun (JSRef Float -> JSRef Float -> IO ())
            -> IO GL
 
-foreign import javascript unsafe "document.documentElement.clientWidth"
-    clientWidth :: IO Float
-
-foreign import javascript unsafe "document.documentElement.clientHeight"
-    clientHeight :: IO Float
-
-data Canvas_
-type Canvas = JSRef Canvas_
+data Element_
+type Element = JSRef Element_
 
 foreign import javascript unsafe "document.getElementById($1)"
-    getElementById :: JSString -> IO Canvas
+    getElementById :: JSString -> IO Element
 
 foreign import javascript unsafe "$1.clearColor($2, $3, $4, $5);"
     clearColor :: GL -> Float -> Float -> Float -> Float -> IO ()
-
-foreign import javascript unsafe "$1.viewport(0, 0, $1.viewportWidth, $1.viewportHeight);"
-    initViewPort :: GL -> IO ()
 
 foreign import javascript unsafe "$1.clear($1.COLOR_BUFFER_BIT | $1.DEPTH_BUFFER_BIT);"
     clear :: GL -> IO ()
 
 foreign import javascript unsafe "requestAnimFrame($1)"
     requestAnimFrame :: JSFun (IO ()) -> IO ()
+
+foreign import javascript unsafe "window.addEventListener('resize',$1);"
+    onWindowResize :: JSFun (IO ()) -> IO ()
+
+foreign import javascript unsafe "getWindowWidth()"
+    windowWidth :: IO Float
+
+foreign import javascript unsafe "getWindowHeight()"
+    windowHeight :: IO Float
+
+foreign import javascript unsafe "resizeViewport($1,$2,$3)"
+    resizeViewport :: Element -> Float -> Float -> IO ()
 
 data Texture_
 type Texture = JSRef Texture_
@@ -121,33 +124,43 @@ instance Platform WebGL where
     engine _ game = do
         canvas <- getElementById "mycanvas"
 
-        width <- clientWidth
-        height <- clientHeight
-        let xscale  = 2000 * width / height
-            iHeight = round height
+        width0 <- windowWidth
+        height0 <- windowHeight
+        (viewport, sendViewport) <- sync $ newBehavior (width0, height0)
 
         (eMouse, sendMouse) <- sync newEvent
+
+        let scaleClick (xx, yy) = do
+                (width, height) <- sync $ sample viewport
+                let xscale  = 2000 * width / height
+                    x = xscale * (xx / width - 0.5)
+                    y = (-2000) * (yy / height - 0.5)
+                return (x, y)
 
         md <- asyncCallback2 True $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
-            let x = xscale * (xx / width - 0.5)
-                y = (-2000) * (yy / height - 0.5)
-            sync $ sendMouse $ MouseDown () (x,y)
+            pt <- scaleClick (xx, yy)
+            sync $ sendMouse $ MouseDown () pt
         mu <- asyncCallback2 True $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
-            let x = xscale * (xx / width - 0.5)
-                y = (-2000) * (yy / height - 0.5)
-            sync $ sendMouse $ MouseUp () (x,y)
+            pt <- scaleClick (xx, yy)
+            sync $ sendMouse $ MouseUp () pt
         mm <- asyncCallback2 True $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
-            let x = xscale * (xx / width - 0.5)
-                y = (-2000) * (yy / height - 0.5)
-            sync $ sendMouse $ MouseMove () (x,y)
+            pt <- scaleClick (xx, yy)
+            sync $ sendMouse $ MouseMove () pt
+
+        or <- asyncCallback True $ do
+            w <- windowWidth
+            h <- windowHeight
+            resizeViewport canvas w h
+            sync $ sendViewport (w,h)
+        onWindowResize or
+
         gl <- initGL canvas md mu mm
-        initViewPort gl
 
         t0 <- getCurrentTime
         tLastEndRef <- newIORef =<< getTime t0
@@ -173,14 +186,16 @@ instance Platform WebGL where
             freeCallback md
             freeCallback mu
             freeCallback mm
+            freeCallback or
 
         animate $ do
 
             t <- readIORef tLastEndRef
             lost <- readIORef timeLostRef
-            sync $ do
+            iHeight <- sync $ do
                 sendTime (t - lost)
                 sendRealTime t
+                round . snd <$> sample viewport
             sprite <- readIORef spriteRef
             preRunSprite internals iHeight sprite
             tEnd <- getTime t0

@@ -41,9 +41,16 @@
 
 <script type="text/javascript">
 
+    function resizeViewport(canvas, width, height)
+    {
+        canvas.width = width;
+        canvas.height = height;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        mat4.identity(pMatrix);
+        mat4.scale(pMatrix, pMatrix, [0.001 * height / width, 0.001, 1]);
+    }
+
     function initGL(canvas, handleMouseDown, handleMouseUp, handleMouseMove) {
-        canvas.width = document.documentElement.clientWidth;
-        canvas.height = document.documentElement.clientHeight;
         try {
             gl = canvas.getContext("webgl");
         }
@@ -57,8 +64,6 @@
         if (!gl) {
             alert("Could not initialise WebGL, sorry :-(");
         }
-        gl.viewportWidth = canvas.width;
-        gl.viewportHeight = canvas.height;
 
         vShader = createShaderFromScriptElement(gl, "shader-vs");
         fShader = createShaderFromScriptElement(gl, "shader-fs");
@@ -68,6 +73,8 @@
         pos = gl.getAttribLocation(program, "aVertexPosition");
         pMatrixUniform = gl.getUniformLocation(program, "uPMatrix");
         mvMatrixUniform = gl.getUniformLocation(program, "uMVMatrix");
+
+        resizeViewport(canvas, getWindowWidth(), getWindowHeight());
 
         texCoordAttr = gl.getAttribLocation(program, "aTextureCoord");
         gl.enableVertexAttribArray(texCoordAttr);
@@ -85,9 +92,6 @@
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
         texCoords.itemSize = 2;
         texCoords.numItems = 4;
-
-        mat4.identity(pMatrix);
-        mat4.scale(pMatrix, pMatrix, [0.001 * gl.viewportHeight / gl.viewportWidth, 0.001, 1]);
 
         squareBuf = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, squareBuf);
@@ -165,6 +169,38 @@
     function destroyImage(tex)
     {
         gl.deleteTexture(tex);
+    }
+
+    function getWindowWidth()
+    {
+      if (typeof (window.innerWidth) == 'number')
+        return window.innerWidth;
+      else {
+        if (document.documentElement && (document.documentElement.clientWidth || document.documentElement.clientHeight))
+          return document.documentElement.clientWidth;
+        else {
+          if (document.body && (document.body.clientWidth || document.body.clientHeight))
+            return document.body.clientWidth;
+          else
+            alert("no window width");
+        }
+      }
+    }
+
+    function getWindowHeight()
+    {
+      if (typeof (window.innerHeight) == 'number')
+        return window.innerHeight;
+      else {
+        if (document.documentElement && (document.documentElement.clientHeight || document.documentElement.clientHeight))
+          return document.documentElement.clientHeight;
+        else {
+          if (document.body && (document.body.clientHeight || document.body.clientHeight))
+            return document.body.clientHeight;
+          else
+            alert("no window width");
+        }
+      }
     }
 </script>
 
