@@ -238,7 +238,7 @@ getTime t0 = do
 
 glEngine :: Platform p =>
             ((Int -> Int -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touch p -> TouchPhase -> Coord -> Coord -> IO ())) -> IO ())
-         -> Game p
+         -> (Behavior Coord -> Game p)
          -> IO ()
 glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir internals -> do
     let aspect = fromIntegral width / fromIntegral height
@@ -261,7 +261,7 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
     (time, sendTime) <- sync $ newBehavior 0
     (realTime, sendRealTime) <- sync $ newBehavior 0
     rng <- newStdGen
-    (bSprite, bMusic, eEffects) <- sync $ game eMouse time rng
+    (bSprite, bMusic, eEffects) <- sync $ game (pure aspect) eMouse time rng
     spriteRef <- newIORef =<< sync (sample bSprite)
     kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
 
