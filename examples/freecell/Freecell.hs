@@ -57,14 +57,14 @@ cardFn (Card v s) = suitName s ++ valueName v ++ ".png"
     valueName Queen = "q"
     valueName King = "k"
 
-freecell :: Platform p => FilePath -> IO (Behavior Coord -> Game p)
-freecell resPath = do
+freecell :: Platform p => IO (Behavior Coord -> Game p)
+freecell = do
     cards <- forM [minBound..maxBound] $ \card -> do
-        i <- image resPath (cardFn card)
+        i <- image (cardFn card)
         return (card, i)
     let cardsM = M.fromList cards
         draw card = fromJust $ M.lookup card cardsM
-    emptySpace <- image resPath "empty-space.png"
+    emptySpace <- image "empty-space.png"
     return $ game draw emptySpace
 
 noOfStacks :: Int

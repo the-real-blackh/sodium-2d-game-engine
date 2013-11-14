@@ -16,38 +16,23 @@ flag ghcjs
   default:     False
 
 library
+  exposed-modules:
+        FRP.Sodium.GameEngine2D.Game
+        FRP.Sodium.GameEngine2D.CommonGL
+        FRP.Sodium.GameEngine2D.Geometry
+        FRP.Sodium.GameEngine2D.Orientation
+        FRP.Sodium.GameEngine2D.Cache
+        FRP.Sodium.GameEngine2D.Image
+        FRP.Sodium.GameEngine2D.Platform
+        FRP.Sodium.GameEngine2D.CommonAL
 
   if os(ios)
       exposed-modules:  FRP.Sodium.GameEngine2D.IOS
-            FRP.Sodium.GameEngine2D.Game
-            FRP.Sodium.GameEngine2D.CommonGL
-            FRP.Sodium.GameEngine2D.Geometry
-            FRP.Sodium.GameEngine2D.Orientation
-            FRP.Sodium.GameEngine2D.Cache
-            FRP.Sodium.GameEngine2D.Image
-            FRP.Sodium.GameEngine2D.Platform
-            FRP.Sodium.GameEngine2D.CommonAL
   else
       if flag(ghcjs)
         exposed-modules:  FRP.Sodium.GameEngine2D.WebGL
-            FRP.Sodium.GameEngine2D.Game
-            FRP.Sodium.GameEngine2D.CommonGL
-            FRP.Sodium.GameEngine2D.Geometry
-            FRP.Sodium.GameEngine2D.Orientation
-            FRP.Sodium.GameEngine2D.Cache
-            FRP.Sodium.GameEngine2D.Image
-            FRP.Sodium.GameEngine2D.Platform
-            FRP.Sodium.GameEngine2D.CommonAL
       else
         exposed-modules:  FRP.Sodium.GameEngine2D.GLUT
-            FRP.Sodium.GameEngine2D.Game
-            FRP.Sodium.GameEngine2D.CommonGL
-            FRP.Sodium.GameEngine2D.Geometry
-            FRP.Sodium.GameEngine2D.Orientation
-            FRP.Sodium.GameEngine2D.Cache
-            FRP.Sodium.GameEngine2D.Image
-            FRP.Sodium.GameEngine2D.Platform
-            FRP.Sodium.GameEngine2D.CommonAL
 
   build-depends:    base >= 4.5 && < 4.8,
                     filepath,

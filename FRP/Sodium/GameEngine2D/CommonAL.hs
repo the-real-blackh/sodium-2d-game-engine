@@ -17,13 +17,14 @@ import qualified Codec.Audio.Vorbis.File as V
 import Data.Sequence (Seq, (|>))
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as Foldable
+import System.FilePath
 
 
 data SoundInfo = SoundPath FilePath
                | SoundImage V.Info [ByteString]
 
-spool :: SoundInfo -> (V.Info -> IO (Maybe ByteString) -> IO a) -> IO a
-spool (SoundImage info initBlocks) code = do
+spool :: FilePath -> SoundInfo -> (V.Info -> IO (Maybe ByteString) -> IO a) -> IO a
+spool _ (SoundImage info initBlocks) code = do
     blocksRef <- newIORef initBlocks
     code info $ do
         blocks <- readIORef blocksRef
@@ -32,9 +33,9 @@ spool (SoundImage info initBlocks) code = do
             (blk:blks) -> do
                 writeIORef blocksRef blks
                 return $ Just blk
-spool (SoundPath path) code = do
+spool resPath (SoundPath path) code = do
     remRef <- newIORef $ Just B.empty
-    V.withFile path $ \f -> do
+    V.withFile (resPath </> path) $ \f -> do
         info <- V.info f
         let factor = case V.inChannels info of
                 V.Mono   -> 1
@@ -63,8 +64,8 @@ spool (SoundPath path) code = do
                 Just rem -> loop [rem] (B.length rem)
                 Nothing  -> return Nothing
 
-loadSound :: SoundInfo -> IO SoundInfo
-loadSound si = spool si $ \info getBlock ->
+loadSound :: FilePath -> SoundInfo -> IO SoundInfo
+loadSound resPath si = spool resPath si $ \info getBlock ->
     SoundImage info <$> unfoldM getBlock
 
 unfoldM :: Monad m => m (Maybe a) -> m [a]
@@ -79,8 +80,8 @@ unfoldM fetch = go []
 alOpenDevice :: IO (Maybe Device)
 alOpenDevice = openDevice Nothing
 
-alAudioThread :: Device -> [(Behavior [IORef SoundInfo], ALfloat)] -> IO ()
-alAudioThread device bSounds = do
+alAudioThread :: FilePath -> Device -> [(Behavior [IORef SoundInfo], ALfloat)] -> IO ()
+alAudioThread resPath device bSounds = do
     Just context <- createContext device []
     currentContext $= Just context
 
@@ -114,7 +115,7 @@ alAudioThread device bSounds = do
             let playIt _   []         = return ()
                 playIt fs0 (soundRef:rem) = do
                     sound <- readIORef soundRef
-                    continue <- spool sound $ \info getBlock -> do
+                    continue <- spool resPath sound $ \info getBlock -> do
                         let fmt = case V.inChannels info of
                                 V.Mono   -> Mono16
                                 V.Stereo -> Stereo16

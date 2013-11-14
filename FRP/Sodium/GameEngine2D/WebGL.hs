@@ -110,8 +110,9 @@ getTime t0 = do
     return $ realToFrac (t `diffUTCTime` t0)
 
 instance Platform WebGL where
-    data Args WebGL = WebGLArgs
+    data Args WebGL = WebGLArgs FilePath
     data Internals WebGL = WebGLInternals {
+            inResPath  :: FilePath,
             inCache    :: Cache Rect
         }
     data Sprite WebGL = Sprite {
@@ -124,7 +125,7 @@ instance Platform WebGL where
     data Sound WebGL = Sound
     type Touch WebGL = ()
 
-    engine _ game = do
+    engine (WebGLArgs resPath) game = do
         canvas <- getElementById "mycanvas"
 
         width0 <- windowWidth
@@ -180,6 +181,7 @@ instance Platform WebGL where
 
         cache <- newCache
         let internals = WebGLInternals {
+                    inResPath  = resPath,
                     inCache    = cache
                 }
 
@@ -226,14 +228,15 @@ instance Platform WebGL where
 
     nullDrawable rect = Sprite NullKey rect Nothing (return ())
 
-    image resDir path = do
+    image path = do
         let key = ByteStringKey $ C.pack $ takeFileName path
         return $ \rect ->
             let cacheIt = Just $ do
+                    resPath <- asks (inResPath . ssInternals)
                     cache <- asks (inCache . ssInternals)
                     liftIO $ writeCache cache key $ do
                         --putStrLn $ "loading "++path
-                        tex <- loadImage $ fromString $ resDir </> path
+                        tex <- loadImage $ fromString $ resPath </> path
                         let draw' ((x,y),(w,h)) = drawImage tex x y w h
                             cleanup' = destroyImage tex
                         return (draw', cleanup')
@@ -246,7 +249,7 @@ instance Platform WebGL where
                             Nothing   -> return ()
             in  Sprite key rect cacheIt drawIt
 
-    sound resDir file = error "WebGL.sound undefined"
+    sound file = error "WebGL.sound undefined"
 
     retainSound Sound = error "WebGL.retainSound undefined"
 

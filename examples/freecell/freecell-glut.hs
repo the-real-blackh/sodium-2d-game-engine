@@ -4,5 +4,5 @@ import FRP.Sodium.GameEngine2D.Platform (engine)
 
 
 main = do
-    game <- freecell "template/cards"
-    engine (GLUTArgs "freecell") game
+    game <- freecell
+    engine (GLUTArgs "freecell" "template/cards") game

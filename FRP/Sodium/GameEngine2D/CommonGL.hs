@@ -275,7 +275,7 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
         b2 <- hold [] $ (:[]) <$> eEffects2
         bMusic' <- removeDuplicateMusic bMusic
         return (b1, b2, bMusic')
-    audioThread [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
+    audioThread internals [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
 
     t0 <- getCurrentTime
     tLastEndRef <- newIORef =<< getTime t0

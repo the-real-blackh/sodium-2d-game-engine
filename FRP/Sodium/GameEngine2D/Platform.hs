@@ -55,9 +55,9 @@ class (Monoid (Sprite p),
     type Touch p
     engine :: Args p -> (Behavior Float -> Game p) -> IO ()
     nullDrawable :: Drawable p
-    image :: FilePath -> FilePath -> IO (Drawable p)
-    sound :: FilePath -> FilePath -> IO (Sound p)
-    retainSound :: Sound p -> IO ()
+    image :: FilePath -> IO (Drawable p)
+    sound :: FilePath -> IO (Sound p)
+    retainSound :: Args p -> Sound p -> IO ()
     translateSprite :: (Coord, Coord) -> Sprite p -> Sprite p
     createFont :: FilePath
                -> Float         -- Y correction upwards fraction of 1.
@@ -74,7 +74,7 @@ class (Monoid (Sprite p),
     shrink :: Coord -> Sprite p -> Sprite p
     preRunSprite :: Internals p -> Int -> Sprite p -> IO ()
     runSprite :: Internals p -> Int -> Sprite p -> Bool -> IO ()
-    audioThread :: [(Behavior [Sound p], Float)] -> IO ()
+    audioThread :: Internals p -> [(Behavior [Sound p], Float)] -> IO ()
     -- Rotate the sprite 90 degrees clockwise
     clockwiseSprite :: Sprite p -> Sprite p
     -- Rotate the sprite 90 degrees anti-clockwise

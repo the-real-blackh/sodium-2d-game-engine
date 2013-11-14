@@ -40,7 +40,7 @@ import System.Random (newStdGen)
 initGraphics :: Args GLUT
              -> (Int -> Int -> FilePath -> FilePath -> Internals GLUT -> IO (IO (), IO (), Touch GLUT -> TouchPhase -> Coord -> Coord -> IO ()))
              -> IO ()
-initGraphics (GLUTArgs title) init = do
+initGraphics (GLUTArgs title resPath) init = do
     _ <- GLUT.getArgsAndInitialize
     GLUT.initialDisplayMode $= [GLUT.DoubleBuffered]
     GLUT.createWindow title
@@ -51,6 +51,7 @@ initGraphics (GLUTArgs title) init = do
     GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
     cache <- newCache
     let internals = GLUTInternals {
+                inResPath  = resPath,
                 inCache    = cache,
                 inScreenHt = height
             }
@@ -136,9 +137,11 @@ drawAt key action rect@((posX, posY),(sizeX, sizeY)) = Sprite key rect Nothing $
 
 instance Platform GLUT where
     data Args GLUT = GLUTArgs {
-            gaTitle :: String
+            gaTitle   :: String,
+            gaResPath :: String
         }
     data Internals GLUT = GLUTInternals {
+            inResPath  :: FilePath,
             inCache    :: Cache (Point, GLfloat),
             inScreenHt :: Int
         }
@@ -159,15 +162,16 @@ instance Platform GLUT where
 
     nullDrawable = drawAt NullKey $ \_ -> return ()
 
-    image resDir path = do
+    image path = do
         let key = ByteStringKey $ C.pack $ takeFileName path
         return $ \rect@((posX, posY),(sizeX, sizeY)) ->
             let cacheIt = Just $ do
+                    resPath <- asks (inResPath . ssInternals)
                     cache <- asks (inCache . ssInternals)
                     liftIO $ writeCache cache key $ do
                         putStrLn $ "loading "++path
                         when simulateIOSSpeed $ liftIO $ threadDelay 600
-                        ti <- loadTexture (resDir </> path) False
+                        ti <- loadTexture (resPath </> path) False
                         to <- createTexture ti
                         let draw' (_, brightness) = do
                                 color $ Color4 1 1 1 brightness
@@ -191,10 +195,11 @@ instance Platform GLUT where
                             Nothing   -> return ()
             in  Sprite key rect cacheIt drawIt
 
-    sound resDir file = Sound <$> newIORef (SoundPath $ resDir </> file)
-    retainSound (Sound siRef) = do
+    sound file = Sound <$> newIORef (SoundPath file)
+
+    retainSound (GLUTArgs _ resPath) (Sound siRef) = do
         si <- readIORef siRef
-        si' <- CommonAL.loadSound si
+        si' <- CommonAL.loadSound resPath si
         writeIORef siRef si'
 
     translateSprite v@(vx, vy) (Sprite key rect cache action) = Sprite key (translateRect v rect) cache $ do
@@ -272,9 +277,9 @@ instance Platform GLUT where
         runReaderT action ss
         when flip $ flipCache (inCache internals)
 
-    audioThread bSounds = do
+    audioThread inn bSounds = do
         Just device <- CommonAL.alOpenDevice
-        CommonAL.alAudioThread device $
+        CommonAL.alAudioThread (inResPath inn) device $
             (\(b, gain) -> (map (\(Sound si) -> si) <$> b, realToFrac gain)) <$> bSounds
 
     -- Rotate the sprite 90 degrees clockwise
