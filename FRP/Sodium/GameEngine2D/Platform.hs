@@ -1,9 +1,9 @@
 {-# LANGUAGE TypeFamilies, GeneralizedNewtypeDeriving, FlexibleInstances,
         MultiParamTypeClasses, FlexibleContexts, StandaloneDeriving,
         UndecidableInstances #-}
-module Platform where
+module FRP.Sodium.GameEngine2D.Platform where
 
-import Geometry
+import FRP.Sodium.GameEngine2D.Geometry
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Monoid
@@ -12,7 +12,6 @@ import Data.Text (Text)
 import FRP.Sodium
 import System.FilePath
 import System.Random (StdGen)
-import Text.XML.Expat.Pickle
 
 data MouseEvent p = MouseDown (Touch p) Point | MouseMove (Touch p) Point | MouseUp (Touch p) Point
 
@@ -44,9 +43,6 @@ appendKey :: Key -> Key -> Key
 appendKey NullKey k = k
 appendKey k NullKey = k
 appendKey k1 k2 = CompositeKey k1 k2
-
-instance XmlPickler Text Key where
-    xpickle = xpPrim
 
 class (Monoid (Sprite p),
        Eq (Touch p),

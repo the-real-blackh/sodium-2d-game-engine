@@ -1,0 +1,82 @@
+name:                sodium-2d-game-engine
+version:             0.0.0.1
+synopsis:            A cross-platform Haskell/Sodium/OpenGL game engine
+-- description:         
+license:             AllRightsReserved
+license-file:        LICENSE
+author:              Stephen Blackheath
+maintainer:          homely.lumberman.stephen@blacksapphire.com
+-- copyright:           
+-- category:            
+build-type:          Simple
+cabal-version:       >=1.8
+
+flag ghcjs
+  Description: True if we are building for ghcjs
+  default:     False
+
+library
+
+  if os(ios)
+      exposed-modules:  FRP.Sodium.GameEngine2D.IOS
+            FRP.Sodium.GameEngine2D.Game
+            FRP.Sodium.GameEngine2D.CommonGL
+            FRP.Sodium.GameEngine2D.Geometry
+            FRP.Sodium.GameEngine2D.Orientation
+            FRP.Sodium.GameEngine2D.Cache
+            FRP.Sodium.GameEngine2D.Image
+            FRP.Sodium.GameEngine2D.Platform
+            FRP.Sodium.GameEngine2D.CommonAL
+  else
+      if flag(ghcjs)
+        exposed-modules:  FRP.Sodium.GameEngine2D.WebGL
+            FRP.Sodium.GameEngine2D.Game
+            FRP.Sodium.GameEngine2D.CommonGL
+            FRP.Sodium.GameEngine2D.Geometry
+            FRP.Sodium.GameEngine2D.Orientation
+            FRP.Sodium.GameEngine2D.Cache
+            FRP.Sodium.GameEngine2D.Image
+            FRP.Sodium.GameEngine2D.Platform
+            FRP.Sodium.GameEngine2D.CommonAL
+      else
+        exposed-modules:  FRP.Sodium.GameEngine2D.GLUT
+            FRP.Sodium.GameEngine2D.Game
+            FRP.Sodium.GameEngine2D.CommonGL
+            FRP.Sodium.GameEngine2D.Geometry
+            FRP.Sodium.GameEngine2D.Orientation
+            FRP.Sodium.GameEngine2D.Cache
+            FRP.Sodium.GameEngine2D.Image
+            FRP.Sodium.GameEngine2D.Platform
+            FRP.Sodium.GameEngine2D.CommonAL
+
+  build-depends:    base >= 4.5 && < 4.8,
+                    filepath,
+                    bytestring >= 0.10.0.0,
+                    containers >= 0.5.0.0,
+                    time,
+                    random >= 1.0.1.1,
+                    mtl >= 2.1.2,
+                    sodium >= 0.9.0.0,
+                    text >= 0.11.3.1,
+                    directory >= 1.2.0.0,
+                    stm >= 2.4.2
+  if os(ios)
+      build-depends:    OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
+                        FTGLES >= 1.333, libvorbis
+  else
+      if flag(ghcjs)
+          build-depends:
+      else
+          build-depends:    OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
+                            GLUT >= 2.5.0.0, bitmap >= 0.0.2, stb-image >= 0.2.1, FTGL >= 1.333,
+                            libvorbis
+  ghc-options:
+        -fwarn-incomplete-patterns
+        -fwarn-overlapping-patterns
+        -fwarn-missing-fields
+        -threaded -O2
+  if os(ios)
+      ghc-options:
+            -staticlib
+            "-with-rtsopts=-G3"
+

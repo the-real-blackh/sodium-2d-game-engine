@@ -4,3 +4,4 @@
 *.js_o
 freecell-glut
 freecell-webgl
+dist/

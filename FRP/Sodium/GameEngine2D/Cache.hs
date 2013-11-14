@@ -1,4 +1,4 @@
-module Cache (
+module FRP.Sodium.GameEngine2D.Cache (
         Cache,
         readCache,
         writeCache,
@@ -6,8 +6,8 @@ module Cache (
         flipCache
     ) where
 
-import Geometry
-import Platform (Key)
+import FRP.Sodium.GameEngine2D.Geometry
+import FRP.Sodium.GameEngine2D.Platform (Key)
 
 import Control.Applicative
 import Control.Monad

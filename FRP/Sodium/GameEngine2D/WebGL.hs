@@ -1,11 +1,11 @@
 {-# LANGUAGE ForeignFunctionInterface, TypeFamilies, FlexibleInstances,
         MultiParamTypeClasses, OverloadedStrings, Rank2Types, EmptyDataDecls,
         JavaScriptFFI, RecursiveDo #-}
-module WebGL where
+module FRP.Sodium.GameEngine2D.WebGL where
 
-import Cache
-import Geometry
-import Platform
+import FRP.Sodium.GameEngine2D.Cache
+import FRP.Sodium.GameEngine2D.Geometry
+import FRP.Sodium.GameEngine2D.Platform
 
 import Control.Applicative
 import Control.Concurrent

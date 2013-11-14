@@ -1,6 +1,6 @@
 import Freecell
-import GLUT
-import Platform (engine)
+import FRP.Sodium.GameEngine2D.GLUT
+import FRP.Sodium.GameEngine2D.Platform (engine)
 
 
 main = do

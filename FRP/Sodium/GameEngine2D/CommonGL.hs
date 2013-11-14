@@ -1,10 +1,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleInstances, MultiParamTypeClasses,
         OverloadedStrings #-}
-module CommonGL where
+module FRP.Sodium.GameEngine2D.CommonGL where
 
-import Geometry
-import Orientation
-import Platform
+import FRP.Sodium.GameEngine2D.Geometry
+import FRP.Sodium.GameEngine2D.Orientation
+import FRP.Sodium.GameEngine2D.Platform
 
 import Control.Applicative
 import Control.Arrow

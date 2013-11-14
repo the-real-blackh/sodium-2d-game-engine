@@ -1,4 +1,4 @@
-module Geometry where
+module FRP.Sodium.GameEngine2D.Geometry where
 
 
 type Coord = Float

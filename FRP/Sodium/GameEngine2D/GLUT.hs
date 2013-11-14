@@ -1,14 +1,14 @@
 {-# LANGUAGE ForeignFunctionInterface, TypeFamilies, FlexibleInstances,
         MultiParamTypeClasses, OverloadedStrings, Rank2Types #-}
-module GLUT where
+module FRP.Sodium.GameEngine2D.GLUT where
 
-import Cache
-import CommonAL (SoundInfo(..))
-import qualified CommonAL as CommonAL
-import CommonGL
-import Geometry
-import Image
-import Platform
+import FRP.Sodium.GameEngine2D.Cache
+import FRP.Sodium.GameEngine2D.CommonAL (SoundInfo(..))
+import qualified FRP.Sodium.GameEngine2D.CommonAL as CommonAL
+import FRP.Sodium.GameEngine2D.CommonGL
+import FRP.Sodium.GameEngine2D.Geometry
+import FRP.Sodium.GameEngine2D.Image
+import FRP.Sodium.GameEngine2D.Platform
 
 import Control.Applicative
 import Control.Concurrent (threadDelay, forkIO)

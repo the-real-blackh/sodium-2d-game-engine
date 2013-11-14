@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, RankNTypes, BangPatterns #-}
-module CommonAL where
+module FRP.Sodium.GameEngine2D.CommonAL where
 
 import Control.Applicative
 import Control.Concurrent

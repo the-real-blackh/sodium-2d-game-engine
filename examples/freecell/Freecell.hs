@@ -1,7 +1,9 @@
 {-# LANGUAGE DoRec, OverloadedStrings, TupleSections #-}
 module Freecell (freecell) where
 
-import Geometry
+import FRP.Sodium.GameEngine2D.Geometry
+import FRP.Sodium.GameEngine2D.Platform
+
 import FRP.Sodium
 import Control.Applicative
 import Control.Monad
@@ -11,7 +13,6 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
-import Platform
 import System.Random
 import System.FilePath
 import Data.Array.IArray as A

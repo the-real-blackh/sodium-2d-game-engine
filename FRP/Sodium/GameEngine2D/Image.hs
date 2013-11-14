@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-module Image (
+module FRP.Sodium.GameEngine2D.Image (
         createTexture,
         TextureImage_(..),
         TextureImage,

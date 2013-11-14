@@ -1,4 +1,4 @@
-module Orientation where
+module FRP.Sodium.GameEngine2D.Orientation where
 
 
 data Orientation = OrientationUp

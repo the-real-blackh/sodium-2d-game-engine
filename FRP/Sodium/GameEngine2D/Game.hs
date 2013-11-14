@@ -1,20 +1,12 @@
 {-# LANGUAGE StandaloneDeriving, FlexibleContexts, UndecidableInstances #-}
-module Game where
+module FRP.Sodium.GameEngine2D.Game where
 
-import Geometry
-import Platform
+import FRP.Sodium.GameEngine2D.Geometry
+import FRP.Sodium.GameEngine2D.Platform
+
 import FRP.Sodium
 import System.Random (StdGen)
 
-
-type Game p = Event (MouseEvent p)
-           -> Behaviour Double
-           -> StdGen
-           -> Reactive (Behaviour (Sprite p))
-
-data MouseEvent p = MouseDown (Touch p) Point | MouseMove (Touch p) Point | MouseUp (Touch p) Point
-
-deriving instance Show (Touch p) => Show (MouseEvent p)
 
 -- | Like 'gate' except it only blocks mouse down events, otherwise we get weird
 -- effects.
