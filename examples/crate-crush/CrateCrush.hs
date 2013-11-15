@@ -35,18 +35,18 @@ identify ea = do
     return $ snapshotWith (\a ident -> (ident, a)) ea ident
 
 game :: Platform p =>
-        Drawable p
-     -> Drawable p
-     -> Sound p
-     -> Sound p
-     -> Behavior Coord  -- ^ Aspect ratio
-     -> Event (MouseEvent p)
-     -> Behaviour Double
-     -> StdGen
+        Drawable p           -- ^ Crate
+     -> Drawable p           -- ^ Grass
+     -> Sound p              -- ^ Create
+     -> Sound p              -- ^ Smash
+     -> Behavior Coord       -- ^ Aspect ratio
+     -> Event (MouseEvent p) -- ^ Mouse events
+     -> Behavior Double     -- ^ Time
+     -> StdGen               -- ^ Random number generator
      -> Reactive (
-            Behaviour (Sprite p),
-            Behavior (Text, [Sound p]),
-            Event (Sound p)
+            Behavior (Sprite p),         -- ^ Sprites to draw
+            Behavior (Text, [Sound p]),  -- ^ Music
+            Event (Sound p)              -- ^ Sound effects
         )
 game drawCrate drawGrass playCreate playDestroy aspect eMouse time rng = do
 
@@ -55,7 +55,6 @@ game drawCrate drawGrass playCreate playDestroy aspect eMouse time rng = do
         crateMap <- accum M.empty (merge eCreate eDestroy)
         -- Behavior [Behavior (Int, Rect)]
         let crates0 = fmap (map (\(i, b) -> fmap (i, ) b) . M.toList) crateMap
-        -- sequenceA :: Applicative f => t (f a) -> f (t a)
         -- Behavior (Behavior [(Int, Rect)])
         let crates1 = fmap sequenceA crates0
         -- Behavior [(Int, Rect)]
@@ -72,6 +71,8 @@ game drawCrate drawGrass playCreate playDestroy aspect eMouse time rng = do
 
         -- Event (Int, Point)
         eIdNewPoint <- identify eNewPoint
+
+        -- Event (Int, Behavior Rect)
         let eIdNewCrate = execute $ fmap (\(i, pt) -> do
                                               rect <- crate i pt crates time
                                               return (i, rect)
@@ -102,7 +103,7 @@ gravity :: Coord
 gravity = -2
 
 grassRect :: Rect
-grassRect = edgesRect (-5000, -2000, 5000, (-1000) + crateHt)
+grassRect = edgesRect (-5000, -1100, 5000, (-1000) + crateHt)
   where (_, crateHt) = crateSize
 
 sitsOn :: Rect -> Rect -> Maybe Coord
@@ -118,9 +119,14 @@ sitsOn r0 r1 =
         else Nothing
   where (_, crateHt) = crateSize
 
-crate :: Int -> Point -> Behavior [(Int, Rect)] -> Behaviour Double -> Reactive (Behavior Rect)
+crate :: Int                     -- ^ Unique identifier
+      -> Point                   -- ^ Initial position
+      -> Behavior [(Int, Rect)]  -- ^ Positions of all crates 
+      -> Behavior Double        -- ^ Time
+      -> Reactive (Behavior Rect)
 crate me pt0 crates time = do
     let obstacles = fmap (\crates ->
+                -- add the grass to the list of obstacles
                 [grassRect] ++
                 -- exclude myself
                 mapMaybe (\(i, rect) -> if i /= me then Just rect else Nothing) crates
