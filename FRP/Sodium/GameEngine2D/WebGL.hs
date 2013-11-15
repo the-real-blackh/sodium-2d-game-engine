@@ -249,9 +249,9 @@ instance Platform WebGL where
                             Nothing   -> return ()
             in  Sprite key rect cacheIt drawIt
 
-    sound file = error "WebGL.sound undefined"
+    sound file = return Sound
 
-    retainSound _ _ = error "WebGL.retainSound undefined"
+    retainSound _ _ = return ()
 
     translateSprite v@(vx, vy) (Sprite key rect cache action) = error "WebGL.translateSprite undefined"
     createFont resPath ycorr = error "WebGL.createFont undefined"

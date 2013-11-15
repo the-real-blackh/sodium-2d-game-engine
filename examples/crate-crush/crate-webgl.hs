@@ -1,9 +1,9 @@
 import CrateCrush
-import FRP.Sodium.GameEngine2D.GLUT
 import FRP.Sodium.GameEngine2D.Platform (engine)
+import FRP.Sodium.GameEngine2D.WebGL
 
 
 main = do
-    let args = GLUTArgs "Crate Crush" "resources"
+    let args = WebGLArgs "resources"
     game <- crateCrush args
     engine args game
