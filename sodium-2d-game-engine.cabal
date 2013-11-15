@@ -18,21 +18,23 @@ flag ghcjs
 library
   exposed-modules:
         FRP.Sodium.GameEngine2D.Game
-        FRP.Sodium.GameEngine2D.CommonGL
         FRP.Sodium.GameEngine2D.Geometry
         FRP.Sodium.GameEngine2D.Orientation
         FRP.Sodium.GameEngine2D.Cache
-        FRP.Sodium.GameEngine2D.Image
         FRP.Sodium.GameEngine2D.Platform
-        FRP.Sodium.GameEngine2D.CommonAL
 
   if os(ios)
       exposed-modules:  FRP.Sodium.GameEngine2D.IOS
+                        FRP.Sodium.GameEngine2D.CommonGL
+                        FRP.Sodium.GameEngine2D.CommonAL
   else
       if flag(ghcjs)
         exposed-modules:  FRP.Sodium.GameEngine2D.WebGL
       else
         exposed-modules:  FRP.Sodium.GameEngine2D.GLUT
+                          FRP.Sodium.GameEngine2D.CommonGL
+                          FRP.Sodium.GameEngine2D.CommonAL
+                          FRP.Sodium.GameEngine2D.Image
 
   build-depends:    base >= 4.5 && < 4.8,
                     filepath,
@@ -50,7 +52,7 @@ library
                         FTGLES >= 1.333, libvorbis
   else
       if flag(ghcjs)
-          build-depends:
+          build-depends:    ghcjs-base
       else
           build-depends:    OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
                             GLUT >= 2.5.0.0, bitmap >= 0.0.2, stb-image >= 0.2.1, FTGL >= 1.333,
@@ -59,7 +61,6 @@ library
         -fwarn-incomplete-patterns
         -fwarn-overlapping-patterns
         -fwarn-missing-fields
-        -threaded -O2
   if os(ios)
       ghc-options:
             -staticlib

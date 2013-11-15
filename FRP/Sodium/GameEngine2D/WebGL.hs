@@ -251,7 +251,7 @@ instance Platform WebGL where
 
     sound file = error "WebGL.sound undefined"
 
-    retainSound Sound = error "WebGL.retainSound undefined"
+    retainSound _ _ = error "WebGL.retainSound undefined"
 
     translateSprite v@(vx, vy) (Sprite key rect cache action) = error "WebGL.translateSprite undefined"
     createFont resPath ycorr = error "WebGL.createFont undefined"
@@ -283,4 +283,3 @@ instance Platform WebGL where
     invisible (Sprite key rect cache _) = error "WebGL.invisible undefined"
     launchURL _ url = error "WebGL.launchURL undefined"
     getSystemLanguage _ = return "en"
-
