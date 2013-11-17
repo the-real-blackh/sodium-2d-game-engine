@@ -21,6 +21,7 @@ import FRP.Sodium
 import GHCJS.Foreign
 import GHCJS.Types
 import GHCJS.Marshal
+import Numeric
 import System.FilePath
 import System.Random (newStdGen)
 
@@ -93,9 +94,9 @@ animate drawScene = do
     rec
         let tick = do
                 drawScene
-                threadDelay (1000000 `div` framesPerSecond)
+                --threadDelay (1000000 `div` framesPerSecond)
                 requestAnimFrame tick'
-        tick' <- asyncCallback True tick
+        tick' <- syncCallback True False tick
     tick
 
 data SpriteState = SpriteState {
@@ -142,23 +143,23 @@ instance Platform WebGL where
                     y = (-2000) * (yy / height - 0.5)
                 return (x, y)
 
-        md <- asyncCallback2 True $ \jx jy -> do
+        md <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseDown () pt
-        mu <- asyncCallback2 True $ \jx jy -> do
+        mu <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseUp () pt
-        mm <- asyncCallback2 True $ \jx jy -> do
+        mm <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseMove () pt
 
-        or <- asyncCallback True $ do
+        or <- syncCallback True False $ do
             w <- windowWidth
             h <- windowHeight
             resizeViewport canvas w h
@@ -185,19 +186,10 @@ instance Platform WebGL where
                     inCache    = cache
                 }
 
-        -- Keep callbacks alive
-        forkIO $ do
-            threadDelay maxBound
-            kill
-            freeCallback md
-            freeCallback mu
-            freeCallback mm
-            freeCallback or
-
         animate $ do
 
             t <- readIORef tLastEndRef
-            print t
+            tStart <- getTime t0
             lost <- readIORef timeLostRef
             iHeight <- sync $ do
                 sendTime (t - lost)
@@ -221,10 +213,23 @@ instance Platform WebGL where
             clear gl
             sprite <- readIORef spriteRef
             runSprite internals iHeight sprite True
-            tEnd <- getTime t0
-            writeIORef tLastEndRef tEnd
+            tFinal <- getTime t0
+            writeIORef tLastEndRef tFinal
+            {-
+            putStrLn $ showFFloat (Just 3) (tStart -t) "" ++ " " ++
+                       showFFloat (Just 3) (tEnd - tStart) "" ++ " " ++
+                       showFFloat (Just 3) (tFinal - tEnd) ""
+                       -}
             _ <- evaluate kill
             return ()
+
+        -- Keep callbacks alive
+        threadDelay maxBound
+        kill
+        freeCallback md
+        freeCallback mu
+        freeCallback mm
+        freeCallback or
 
     nullDrawable rect = Sprite NullKey rect Nothing (return ())
 
