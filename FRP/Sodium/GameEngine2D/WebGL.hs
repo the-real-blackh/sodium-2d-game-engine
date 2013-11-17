@@ -185,7 +185,6 @@ instance Platform WebGL where
                     inCache    = cache
                 }
 
-        putStrLn "animate"
         animate $ do
 
             t <- readIORef tLastEndRef
