@@ -96,8 +96,8 @@ animate drawScene = do
                 drawScene
                 --threadDelay (1000000 `div` framesPerSecond)
                 requestAnimFrame tick'
-        tick' <- syncCallback True False tick
-    tick
+        tick' <- syncCallback True True tick
+    requestAnimFrame tick'
 
 data SpriteState = SpriteState {
         ssInternals  :: Internals WebGL
@@ -127,14 +127,20 @@ instance Platform WebGL where
     type Touch WebGL = ()
 
     engine (WebGLArgs resPath) game = do
-        canvas <- getElementById "mycanvas"
-
         width0 <- windowWidth
         height0 <- windowHeight
         (viewport, sendViewport) <- sync $ newBehavior (width0, height0)
         let aspect = uncurry (/) <$> viewport
 
+        (time, sendTime) <- sync $ newBehavior 0
+        (realTime, sendRealTime) <- sync $ newBehavior 0
+        rng <- newStdGen
         (eMouse, sendMouse) <- sync newEvent
+        (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
+        spriteRef <- newIORef =<< sync (sample bSprite)
+        kill <- sync $ listen (updates bSprite) (writeIORef spriteRef)
+
+        canvas <- getElementById "mycanvas"
 
         let scaleClick (xx, yy) = do
                 (width, height) <- sync $ sample viewport
@@ -143,23 +149,23 @@ instance Platform WebGL where
                     y = (-2000) * (yy / height - 0.5)
                 return (x, y)
 
-        md <- syncCallback2 True False $ \jx jy -> do
+        md <- syncCallback2 True True $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseDown () pt
-        mu <- syncCallback2 True False $ \jx jy -> do
+        mu <- syncCallback2 True True $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseUp () pt
-        mm <- syncCallback2 True False $ \jx jy -> do
+        mm <- syncCallback2 True True $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseMove () pt
 
-        or <- syncCallback True False $ do
+        or <- syncCallback True True $ do
             w <- windowWidth
             h <- windowHeight
             resizeViewport canvas w h
@@ -173,19 +179,13 @@ instance Platform WebGL where
         timeLostRef <- newIORef 0
         tLastGC <- newIORef 0
 
-        (time, sendTime) <- sync $ newBehavior 0
-        (realTime, sendRealTime) <- sync $ newBehavior 0
-        rng <- newStdGen
-        (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
-        spriteRef <- newIORef =<< sync (sample bSprite)
-        kill <- sync $ listen (updates bSprite) (writeIORef spriteRef)
-
         cache <- newCache
         let internals = WebGLInternals {
                     inResPath  = resPath,
                     inCache    = cache
                 }
 
+        putStrLn "animate"
         animate $ do
 
             t <- readIORef tLastEndRef
@@ -219,8 +219,7 @@ instance Platform WebGL where
             putStrLn $ showFFloat (Just 3) (tStart -t) "" ++ " " ++
                        showFFloat (Just 3) (tEnd - tStart) "" ++ " " ++
                        showFFloat (Just 3) (tFinal - tEnd) ""
-                       -}
-            _ <- evaluate kill
+            -}
             return ()
 
         -- Keep callbacks alive
