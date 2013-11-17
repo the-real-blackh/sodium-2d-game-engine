@@ -96,7 +96,7 @@ animate drawScene = do
                 drawScene
                 --threadDelay (1000000 `div` framesPerSecond)
                 requestAnimFrame tick'
-        tick' <- syncCallback True True tick
+        tick' <- syncCallback True False tick
     requestAnimFrame tick'
 
 data SpriteState = SpriteState {
@@ -149,23 +149,23 @@ instance Platform WebGL where
                     y = (-2000) * (yy / height - 0.5)
                 return (x, y)
 
-        md <- syncCallback2 True True $ \jx jy -> do
+        md <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseDown () pt
-        mu <- syncCallback2 True True $ \jx jy -> do
+        mu <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseUp () pt
-        mm <- syncCallback2 True True $ \jx jy -> do
+        mm <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
             sync $ sendMouse $ MouseMove () pt
 
-        or <- syncCallback True True $ do
+        or <- syncCallback True False $ do
             w <- windowWidth
             h <- windowHeight
             resizeViewport canvas w h
