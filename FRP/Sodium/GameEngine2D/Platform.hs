@@ -17,6 +17,16 @@ data MouseEvent p = MouseDown (Touch p) Point | MouseMove (Touch p) Point | Mous
 
 deriving instance Show (Touch p) => Show (MouseEvent p)
 
+mouseTouch :: MouseEvent p -> Touch p
+mouseTouch (MouseDown to _) = to
+mouseTouch (MouseMove to _) = to
+mouseTouch (MouseUp to _) = to
+
+mousePosition :: MouseEvent p -> Point
+mousePosition (MouseDown _ pt) = pt
+mousePosition (MouseMove _ pt) = pt
+mousePosition (MouseUp _ pt) = pt
+
 type Game p = Event (MouseEvent p)
            -> Behaviour Double
            -> StdGen

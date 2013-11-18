@@ -2,6 +2,7 @@
 module Freecell (freecell) where
 
 import Button
+import Gesture
 
 import FRP.Sodium.GameEngine2D.Geometry
 import FRP.Sodium.GameEngine2D.Platform
@@ -210,9 +211,12 @@ stack :: Platform p =>
       -> Location
       -> Behavior Int
       -> Event [Card]
+      -> Event Point
+      -> Behavior [Destination]
       -> Event [Card]
-      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch, Behavior [Card])
-stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eSetState = do
+      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch,
+              Behavior [Card], Event ((Location, [Card])))
+stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eDblClick dblClickDests eSetState = do
     let orig board =
             let (cardWidth, cardHeight) = cardSize board
             in  (
@@ -221,7 +225,7 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eSetState = do
                 )
         positions board = iterate (\(x, y) -> (x, y-overlapY board)) (orig board)
     rec
-        cards <- hold initCards (eRemoveCards `merge` eAddCards `merge` eSetState)
+        cards <- hold initCards (eDragRemove `merge` eDblClkRemove `merge` eAddCards `merge` eSetState)
         let eAddCards = snapshotWith (\newCards cards -> cards ++ newCards) eDrop cards
             eMouseSelection = filterJust $ snapshotWith (\mev (cards, board) ->
                     let (cardWidth, cardHeight) = cardSize board
@@ -237,8 +241,23 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eSetState = do
                                     else Nothing
                         _ -> Nothing
                 ) eMouse (liftA2 (,) cards board)
-            eRemoveCards = fst <$> eMouseSelection   -- Cards left over when we drag
+            eDragRemove = fst <$> eMouseSelection   -- Cards left over when we drag
             eDrag        = snd <$> eMouseSelection   -- Cards removed when we drag
+            eDblClickSelection = filterJust $ snapshotWith (\pt (cards, dests, board) ->
+                    if null cards then Nothing else
+                        let cardRect = (positions board !! (length cards - 1), cardSize board)
+                        in  if pt `inside` cardRect
+                                then 
+                                    let cards' = take (length cards - 1) cards
+                                        card = [cards !! (length cards - 1)]
+                                        check [] = Nothing
+                                        check (dest:dests) | deMayDrop dest card = Just (cards', (deLocation dest, card))
+                                        check (_:dests) = check dests
+                                    in  check dests
+                                else Nothing
+                ) eDblClick (liftA3 (,,) cards dblClickDests board)
+            eDblClkRemove = fst <$> eDblClickSelection   -- Cards left over when we double click
+            eDblClickDispatch = snd <$> eDblClickSelection -- Cards removed when we double click
     let sprites = (\cards board ->
                         mconcat $ zipWith (\pos card -> draw card (pos, cardSize board)) (positions board) cards
                   ) <$> cards <*> board
@@ -255,7 +274,7 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eSetState = do
                             _  -> last cards `follows` head newCards
                 }
             ) <$> cards <*> freeSpaces <*> board
-    return (sprites, dest, eDrag, cards)
+    return (sprites, dest, eDrag, cards, eDblClickDispatch)
 
 -- | The "free cells" where cards can be temporarily put.
 cell :: Platform p =>
@@ -463,7 +482,8 @@ game :: Platform p =>
             Behavior (Text, [Sound p]),
             Event (Sound p)
         )
-game res aspect eMouse time rng0 = do
+game res aspect eMouse0 time rng0 = do
+    (eDblClick, eMouse) <- detectDoubleClick eMouse0 time
     let screen = flip fmap aspect $ \aspect -> marginRect 90 ((0,0),(1000*(min 1.3 aspect),1000))
         buttonArea = takeTopP 50 . takeTopP 9 <$> screen
         board = takeBottomP 91 <$> screen
@@ -482,9 +502,9 @@ game res aspect eMouse time rng0 = do
         buttonArea'' = (\ng -> dropLeft (rectWidth ng) . dropLeft 50) <$> restartRect <*> buttonArea'
         undoRect    = fitAspect (biAspect (reUndo res)) LeftJ <$> buttonArea''
 
-    (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse
-    (restartSpr, eRestart, restartSnd) <- button (reRestart res) restartRect eMouse
-    (undoSpr,    eUndo,    undoSnd)    <- button (reUndo res) undoRect eMouse
+    (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse0
+    (restartSpr, eRestart, restartSnd) <- button (reRestart res) restartRect eMouse0
+    (undoSpr,    eUndo,    undoSnd)    <- button (reUndo res) undoRect eMouse0
     let buttonsSpr = liftA3 (\a b c -> a `mappend` b `mappend` c) newGameSpr restartSpr undoSpr
 
     eNewGameSt <- collectE (\() rng -> mkStackCards rng) rng1 eNewGame
@@ -494,22 +514,27 @@ game res aspect eMouse time rng0 = do
         stackCards0 <- hold stackCards00 $ eNewGameSt `merge` (gsStacks0 <$> eSetState)
 
         let eWhereSucc = dropper eDrop (sequenceA (stDests ++ ceDests ++ [grDest]))
-            eWhere  = snd <$> eWhereSucc
+            eWhere  = (snd <$> eWhereSucc) `merge` eDblClickDispatches
             stDrops = eWhere `distributeTo` stLocs
             ceDrops = eWhere `distributeTo` ceLocs
             grDrops = eWhere `distributeTo` [Grave]
             eSuccessfulDrop = filterJust $ fmap (\(success, _) ->
                 if success then Just () else Nothing) eWhereSucc
 
+        let eOtherUndoableEvents = (const () <$> eDblClickDispatches)
+                       `merge` (const () <$> eNewGameSt `merge` eRestartSt)
         eUndoSt <- undoHandler gameState (const () <$> eDrag) eSuccessfulDrop
-                                         (const () <$> eNewGameSt `merge` eRestartSt) eUndo
+                                          eOtherUndoableEvents eUndo
         let eRestartSt = snapshot eRestart stackCards0
             eSetState = eUndoSt `merge` (mkGameState <$> (eRestartSt `merge` eNewGameSt))
 
         let eSetStackStates = map (\i -> (!! i) . gsStacks <$> eSetState) [0..noOfStacks-1]
-        (stSprites, stDests, stDrags, stStates) <-
-            unzip4 <$> forM (zip4 stLocs stackCards00 stDrops eSetStackStates) (\(loc, cards, drop, eSet) ->
-                stack board draw eMouse cards loc emptySpaces drop eSet)
+        (stSprites, stDests, stDrags, stStates, stDblClickDispatches) <-
+            unzip5 <$> forM (zip4 stLocs stackCards00 stDrops eSetStackStates) (\(loc, cards, drop, eSet) ->
+                stack board draw eMouse cards loc emptySpaces drop eDblClick (sequenceA (grDest:ceDests)) eSet)
+
+        -- Cards dispatched to places at the top of the screen because of a double click
+        let eDblClickDispatches = foldr1 merge stDblClickDispatches
 
         let eSetCellStates = map (\i -> (!! i) . gsCells <$> eSetState) [0..noOfCells-1]
         (ceSprites, ceDests, ceDrags, ceEmptySpaces, ceStates) <-
