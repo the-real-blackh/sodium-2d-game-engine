@@ -65,6 +65,9 @@
             alert("Could not initialise WebGL, sorry :-(");
         }
 
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.BLEND);
+
         vShader = createShaderFromScriptElement(gl, "shader-vs");
         fShader = createShaderFromScriptElement(gl, "shader-fs");
         var program = createProgram(gl, [vShader, fShader]);

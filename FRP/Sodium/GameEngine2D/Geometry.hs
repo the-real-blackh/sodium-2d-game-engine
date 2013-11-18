@@ -158,6 +158,17 @@ splitVertical ps rect = go ps rect (sum ps)
             (top, bottom) = splitTop (h * p / total) rect
         in  top : go ps bottom (total - p) 
 
+-- | Split a rectangle vertically into the specified percentages
+splitHorizontal :: [Float] -> Rect -> [Rect]
+splitHorizontal ps rect = go ps rect (sum ps)
+  where
+    go [] _ _ = error "splitVertical: empty list"
+    go [_] rect _ = [rect]
+    go (p:ps) rect total =
+        let w = rectWidth rect
+            (top, bottom) = splitLeft (w * p / total) rect
+        in  top : go ps bottom (total - p) 
+
 data Justify = LeftJ | CentreJ | RightJ
 
 -- | The resulting rectangle will have the specified aspect ratio and fit in the

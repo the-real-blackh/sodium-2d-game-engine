@@ -1,9 +1,10 @@
-{-# LANGUAGE DoRec, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE RecursiveDo, OverloadedStrings, TupleSections #-}
 module Freecell (freecell) where
+
+import Button
 
 import FRP.Sodium.GameEngine2D.Geometry
 import FRP.Sodium.GameEngine2D.Platform
-
 import FRP.Sodium
 import Control.Applicative
 import Control.Monad
@@ -28,6 +29,17 @@ data ButtonImage p = ButtonImage {
         biDown :: Drawable p,
         biAspect :: Coord
     }
+
+button :: Platform p =>
+          ButtonImage p 
+       -> Behavior Rect
+       -> Event (MouseEvent p)
+       -> Reactive (Behavior (Sprite p), Event (), Event ())
+button bi rect eMouse = plainButton (pure Enabled) rect draw eMouse
+  where
+    draw b = flip fmap b $ \(rect, _, sel) ->
+        if sel then biDown bi rect `mappend` invisible (biUp bi rect)
+               else biUp bi rect `mappend` invisible (biDown bi rect)
 
 data Resources p = Resources {
         reDraw       :: Card -> Drawable p,
@@ -156,10 +168,10 @@ cardSpacingNarrow :: Rect -> Coord
 cardSpacingNarrow board = cardSpacing board * 0.95
 
 topMargin :: Coord
-topMargin = 50
+topMargin = 0
 
 leftMargin :: Rect -> Coord
-leftMargin board = topMargin * rectAspect board
+leftMargin board = 0
 
 topRow :: Rect -> Coord
 topRow board = top - topMargin - cardHeight
@@ -177,7 +189,7 @@ stack :: Platform p =>
          Behavior Rect
       -> (Card -> Drawable p)
       -> Event (MouseEvent p) -> [Card] -> Location -> Behavior Int -> Event [Card]
-      -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch)
+      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch)
 stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
     let orig board =
             let (cardWidth, cardHeight) = cardSize board
@@ -206,7 +218,7 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
             eRemoveCards = fst <$> eMouseSelection   -- Cards left over when we drag
             eDrag        = snd <$> eMouseSelection   -- Cards removed when we drag
     let sprites = (\cards board ->
-                        zipWith (\pos card -> draw card (pos, cardSize board)) (positions board) cards
+                        mconcat $ zipWith (\pos card -> draw card (pos, cardSize board)) (positions board) cards
                   ) <$> cards <*> board
         dest = (\cards freeSpaces board -> Destination {
                     deLocation = loc,
@@ -229,7 +241,7 @@ cell :: Platform p =>
      -> (Card -> Drawable p)
      -> Drawable p
      -> Event (MouseEvent p) -> Location -> Event [Card]
-     -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch, Behavior Int)
+     -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch, Behavior Int)
 cell board draw emptySpace eMouse loc@(Cell ix) eDrop = do
     let orig board =
             let narrow = cardSpacingNarrow board
@@ -246,9 +258,9 @@ cell board draw emptySpace eMouse loc@(Cell ix) eDrop = do
                 ) eMouse (liftA2 (,) mCard board)
             eRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
-    let sprites = (\mCard board -> [case mCard of
+    let sprites = (\mCard board -> case mCard of
                                        Just card -> draw card (orig board, cardSize board)
-                                       Nothing   -> emptySpace (orig board, cardSize board)]
+                                       Nothing   -> emptySpace (orig board, cardSize board)
                   ) <$> mCard <*> board
         dest = (\mCard board -> Destination {
                 deLocation = loc,
@@ -264,7 +276,7 @@ grave :: Platform p =>
       -> (Card -> Drawable p)
       -> Drawable p
       -> Event (MouseEvent p) -> Event [Card]
-      -> Reactive (Behavior [Sprite p], Behavior Destination, Event Bunch)
+      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch)
 grave board draw emptySpace eMouse eDrop = do
     let xOf board ix =    let (cardWidth, _) = cardSize board
                               in  xMax board - cardSpacingNarrow board * fromIntegral (3-ix)
@@ -302,7 +314,7 @@ grave board draw emptySpace eMouse eDrop = do
             eDrag = snd <$> eMouseSelection
     let sprites = (
             \board slots ->
-                zipWith (\pos mSlot ->
+                mconcat $ zipWith (\pos mSlot ->
                          maybe (emptySpace (pos, cardSize board)) (\card -> draw card (pos, cardSize board)) mSlot)
                     (positions board) slots
             ) <$> board <*> slots
@@ -330,7 +342,7 @@ grave board draw emptySpace eMouse eDrop = do
 dragger :: Platform p =>
            Behavior Rect
         -> (Card -> Drawable p)
-        -> Event (MouseEvent p) -> Event Bunch -> Reactive (Behavior [Sprite p], Event (Point, Bunch))
+        -> Event (MouseEvent p) -> Event Bunch -> Reactive (Behavior (Sprite p), Event (Point, Bunch))
 dragger board draw eMouse eStartDrag = do
     dragPos <- hold (0,0) $ flip fmap eMouse $ \mev ->
         case mev of
@@ -350,8 +362,8 @@ dragger board draw eMouse eStartDrag = do
             drawDraggedCards pt (Just bunch) board =
                 let cpos = cardPos pt bunch
                     positions = iterate (\(x, y) -> (x, y-overlapY board)) cpos
-                in  zipWith (\card pos -> draw card (pos, cardSize board)) (buCards bunch) positions
-            drawDraggedCards _ Nothing _ = []
+                in  mconcat $ zipWith (\card pos -> draw card (pos, cardSize board)) (buCards bunch) positions
+            drawDraggedCards _ Nothing _ = mempty
     return (sprites, eDrop)
   where
     cardPos pt bunch = (pt `minus` buInitMousePos bunch) `plus` buInitOrig bunch
@@ -390,7 +402,9 @@ game :: Platform p =>
             Event (Sound p)
         )
 game res aspect eMouse time rng = do
-    let board = flip fmap aspect $ \aspect -> ((0,0),(1000*(min 1.45 aspect),1000))
+    let screen = flip fmap aspect $ \aspect -> marginRect 90 ((0,0),(1000*(min 1.3 aspect),1000))
+        buttonArea = takeTopP 50 . takeTopP 9 <$> screen
+        board = takeBottomP 91 <$> screen
         draw = reDraw res
         emptySpace = reEmptySpace res
         stackCards =
@@ -398,6 +412,18 @@ game res aspect eMouse time rng = do
             in  toStacks noOfStacks cards
         stLocs = map Stack [0..noOfStacks-1]
         ceLocs = map Cell [0..noOfCells-1]
+
+        newGameRect = fitAspect (biAspect (reNewGame res)) LeftJ <$> buttonArea
+        buttonArea' = (\ng -> dropLeft (rectWidth ng) . dropLeft 50) <$> newGameRect <*> buttonArea
+        restartRect = fitAspect (biAspect (reRestart res)) LeftJ <$> buttonArea'
+        buttonArea'' = (\ng -> dropLeft (rectWidth ng) . dropLeft 50) <$> restartRect <*> buttonArea'
+        undoRect    = fitAspect (biAspect (reUndo res)) LeftJ <$> buttonArea''
+
+    (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse
+    (restartSpr, eRestart, restartSnd) <- button (reRestart res) restartRect eMouse
+    (undoSpr,    eUndo,    undoSnd)    <- button (reUndo res) undoRect eMouse
+    let buttonsSpr = liftA3 (\a b c -> a `mappend` b `mappend` c) newGameSpr restartSpr undoSpr
+
     rec
         let eWhere = dropper eDrop (sequenceA (stDests ++ ceDests ++ [grDest]))
             stDrops = eWhere `distributeTo` stLocs
@@ -414,9 +440,9 @@ game res aspect eMouse time rng = do
         let emptySpaces = foldr1 (\x y -> (+) <$> x <*> y) ceEmptySpaces
         (drSprites, eDrop) <- dragger board draw eMouse (foldr1 merge (stDrags ++ ceDrags ++ [grDrag]))
     return (
-        mconcat .
-        (reBackground res ((0,0),(bgAspect * 1000, 1000)):) .
-        concat <$> sequenceA (stSprites ++ ceSprites ++ [grSprites] ++ [drSprites]),
+        mconcat
+        . (reBackground res ((0,0),(bgAspect * 1000, 1000)):)
+        <$> sequenceA ([buttonsSpr] ++ stSprites ++ ceSprites ++ [grSprites, drSprites]),
         pure ("", []),
         never
       )

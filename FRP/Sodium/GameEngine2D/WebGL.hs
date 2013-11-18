@@ -137,8 +137,8 @@ instance Platform WebGL where
         rng <- newStdGen
         (eMouse, sendMouse) <- sync newEvent
         (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
-        spriteRef <- newIORef =<< sync (sample bSprite)
-        kill <- sync $ listen (updates bSprite) (writeIORef spriteRef)
+        spriteRef <- newIORef =<< (Just <$> sync (sample bSprite))
+        kill <- sync $ listen (updates bSprite) (writeIORef spriteRef . Just)
 
         canvas <- getElementById "mycanvas"
 
@@ -194,8 +194,10 @@ instance Platform WebGL where
                 sendTime (t - lost)
                 sendRealTime t
                 round . snd <$> sample viewport
-            sprite <- readIORef spriteRef
-            preRunSprite internals iHeight sprite
+            mSprite <- readIORef spriteRef
+            case mSprite of
+                Just sprite -> preRunSprite internals iHeight sprite
+                Nothing     -> return ()
             tEnd <- getTime t0
             let lost = tEnd - t
             when (lost >= 0.1) $ do
@@ -208,10 +210,13 @@ instance Platform WebGL where
                   else
                     modifyIORef timeLostRef (+lost)
 
-            clearColor gl 0 0 0 1
-            clear gl
-            sprite <- readIORef spriteRef
-            runSprite internals iHeight sprite True
+            case mSprite of
+                Just sprite -> do clearColor gl 0 0 0 1
+                                  clear gl
+                                  runSprite internals iHeight sprite True
+
+                                  writeIORef spriteRef Nothing
+                Nothing     -> return ()
             tFinal <- getTime t0
             writeIORef tLastEndRef tFinal
             {-
@@ -283,6 +288,9 @@ instance Platform WebGL where
     clockwiseSprite (Sprite key rect cache action) = error "WebGL.clockwiseSprite undefined"
     anticlockwiseSprite (Sprite key rect cache action) = error "WebGL.anticlockwiseSprite undefined"
     rotateSprite theta (Sprite key rect@((posX, posY), _) cache action) = error "WebGL.rotateSprite undefined"
-    invisible (Sprite key rect cache _) = error "WebGL.invisible undefined"
+
+    -- Make this sprite invisible, but allow it to cache anything in the invisible sprite
+    invisible (Sprite key rect cache _) = Sprite key rect cache (return ())
+
     launchURL _ url = error "WebGL.launchURL undefined"
     getSystemLanguage _ = return "en"
