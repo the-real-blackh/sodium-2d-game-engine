@@ -237,12 +237,11 @@ getTime t0 = do
     return $ realToFrac (t `diffUTCTime` t0)
 
 glEngine :: Platform p =>
-            ((Int -> Int -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touch p -> TouchPhase -> Coord -> Coord -> IO ())) -> IO ())
+            ((Behavior (Int, Int) -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touch p -> TouchPhase -> Coord -> Coord -> IO ())) -> IO ())
          -> (Behavior Coord -> Game p)
          -> IO ()
-glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir internals -> do
-    let aspect = fromIntegral width / fromIntegral height
-    putStrLn $ "screen size:  "++show width++" x "++show height
+glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir internals -> do
+    let aspect = (\(width, height) -> fromIntegral width / fromIntegral height) <$> viewportSize
     putStrLn $ "resource dir: "++resourceDir
 
     (eMouse, sendMouse) <- sync $ newEvent
@@ -261,7 +260,7 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
     (time, sendTime) <- sync $ newBehavior 0
     (realTime, sendRealTime) <- sync $ newBehavior 0
     rng <- newStdGen
-    (bSprite, bMusic, eEffects) <- sync $ game (pure aspect) eMouse time rng
+    (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
     spriteRef <- newIORef =<< sync (sample bSprite)
     kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
 
@@ -287,9 +286,10 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
             t <- readIORef tLastEndRef
             lost <- readIORef timeLostRef
             --putStrLn $ showFFloat (Just 3) (t - lost) ""
-            sync $ do
+            (width, height) <- sync $ do
                 sendTime (t - lost)
                 sendRealTime t
+                sample viewportSize
             sprite <- readIORef spriteRef
             preRunSprite internals height sprite
             tEnd <- getTime t0
@@ -310,7 +310,8 @@ glEngine initGraphics game = initGraphics $ \width height resourceDir stateDir i
             tStart <- getTime t0
             GL.clear [ColorBuffer]
             loadIdentity
-            GL.scale (0.001/realToFrac aspect) 0.001 (0.001 :: GLfloat)
+            (width, height) <- sync $ sample viewportSize
+            GL.scale (0.001*fromIntegral height/fromIntegral width) 0.001 (0.001 :: GLfloat)
             sprite <- readIORef spriteRef
             runSprite internals height sprite True
             tEnd <- getTime t0

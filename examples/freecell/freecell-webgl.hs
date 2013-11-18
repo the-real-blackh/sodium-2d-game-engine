@@ -5,4 +5,4 @@ import FRP.Sodium.GameEngine2D.WebGL
 
 main = do
     game <- freecell
-    engine (WebGLArgs "cards") game
+    engine (WebGLArgs "resources") game

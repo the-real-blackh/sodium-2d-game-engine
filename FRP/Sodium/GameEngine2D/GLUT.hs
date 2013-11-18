@@ -38,52 +38,56 @@ import System.Random (newStdGen)
 
 
 initGraphics :: Args GLUT
-             -> (Int -> Int -> FilePath -> FilePath -> Internals GLUT -> IO (IO (), IO (), Touch GLUT -> TouchPhase -> Coord -> Coord -> IO ()))
+             -> (Behavior (Int, Int) -> FilePath -> FilePath -> Internals GLUT -> IO (IO (), IO (), Touch GLUT -> TouchPhase -> Coord -> Coord -> IO ()))
              -> IO ()
 initGraphics (GLUTArgs title resPath) init = do
     _ <- GLUT.getArgsAndInitialize
     GLUT.initialDisplayMode $= [GLUT.DoubleBuffered]
     GLUT.createWindow title
-    let width = 960
-        height = 640
+    let width0  = 960 :: Int
+        height0 = 640 :: Int
         resourceDir = "."
-        aspect = realToFrac width / realToFrac height
-    GLUT.windowSize $= GLUT.Size (fromIntegral width) (fromIntegral height)
+    (viewportSize, sendViewportSize) <- sync $ newBehavior (width0, height0)
+    GLUT.windowSize $= GLUT.Size (fromIntegral width0) (fromIntegral height0)
     cache <- newCache
     let internals = GLUTInternals {
-                inResPath  = resPath,
-                inCache    = cache,
-                inScreenHt = height
+                inResPath      = resPath,
+                inCache        = cache,
+                inViewportSize = viewportSize
             }
-    (updateFrame, drawFrame, touched) <- init width height resourceDir resourceDir internals
+    (updateFrame, drawFrame, touched) <- init viewportSize resourceDir resourceDir internals
 
     GLUT.displayCallback $= display updateFrame drawFrame
     GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
 
     let motion (GLUT.Position x y) = do
-            (x', y') <- toScreen x y
+            (x', y') <- toScreen viewportSize x y
             touched () TouchMoved x' y'
     GLUT.motionCallback $= Just motion
     GLUT.passiveMotionCallback $= Just motion
     GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
         case (key, keyState, pos) of
             (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
-                (x', y') <- toScreen x y
+                (x', y') <- toScreen viewportSize x y
                 touched () TouchBegan x' y'
             (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
-                (x', y') <- toScreen x y
+                (x', y') <- toScreen viewportSize x y
                 touched () TouchEnded x' y'
             (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
                 exitSuccess
             _ -> return ()
       )
-    
+    GLUT.reshapeCallback $= Just (\sz@(Size w h) -> do
+        sync $ sendViewportSize (fromIntegral w, fromIntegral h)
+        viewport $= (Position 0 0, sz)
+      )
+ 
     GLUT.mainLoop
 
   where
-    toScreen :: GLint -> GLint -> IO (Coord, Coord)
-    toScreen x y = do
-        (_, Size w h) <- get viewport
+    toScreen :: Behavior (Int, Int) -> GLint -> GLint -> IO (Coord, Coord)
+    toScreen viewportSize x y = do
+        (w, h) <-sync $ sample viewportSize
         let aspect = fromIntegral w / fromIntegral h
             sx = 0.001/aspect
             sy = 0.001
@@ -103,7 +107,8 @@ initGraphics (GLUTArgs title resPath) init = do
 data SpriteState = SpriteState {
         ssFont       :: Font GLUT,
         ssInternals  :: Internals GLUT,
-        ssBrightness :: GLfloat
+        ssBrightness :: GLfloat,
+        ssScreenHt   :: Int
     }
 
 data GLUT = GLUT
@@ -143,7 +148,7 @@ instance Platform GLUT where
     data Internals GLUT = GLUTInternals {
             inResPath  :: FilePath,
             inCache    :: Cache (Point, GLfloat),
-            inScreenHt :: Int
+            inViewportSize :: Behavior (Int, Int)
         }
     data Sprite GLUT = Sprite {
             spKey   :: Key,
@@ -169,7 +174,7 @@ instance Platform GLUT where
                     resPath <- asks (inResPath . ssInternals)
                     cache <- asks (inCache . ssInternals)
                     liftIO $ writeCache cache key $ do
-                        putStrLn $ "loading "++path
+                        --putStrLn $ "loading "++path
                         when simulateIOSSpeed $ liftIO $ threadDelay 600
                         ti <- loadTexture (resPath </> path) False
                         to <- createTexture ti
@@ -235,7 +240,7 @@ instance Platform GLUT where
                                                             [ColorBuffer']
                                                             Nearest
                         else Nothing
-                    screenHt = inScreenHt (ssInternals ss)
+                    screenHt = ssScreenHt ss
                 liftIO $ writeCache cache key $ offscreen rect screenHt multisample draw
                 return ()
             draw = do
@@ -260,19 +265,23 @@ instance Platform GLUT where
             GL.translate $ Vector3 (-px) (-py) (0 :: GLfloat)
             runReaderT action ss
     preRunSprite internals brightness (Sprite _ _ mCache action) = do
+        (_, screenHt) <- sync $ sample (inViewportSize internals)
         let ss = SpriteState {
                     ssFont = error "font not defined!",
                     ssInternals = internals,
-                    ssBrightness = 1
+                    ssBrightness = 1,
+                    ssScreenHt = screenHt
                 }
         case mCache of
             Just cache -> runReaderT cache ss
             Nothing    -> return ()
     runSprite internals brightness (Sprite _ _ mCache action) flip = do
+        (_, screenHt) <- sync $ sample (inViewportSize internals)
         let ss = SpriteState {
                     ssFont = error "font not defined!",
                     ssInternals = internals,
-                    ssBrightness = 1
+                    ssBrightness = 1,
+                    ssScreenHt = screenHt
                 }
         runReaderT action ss
         when flip $ flipCache (inCache internals)

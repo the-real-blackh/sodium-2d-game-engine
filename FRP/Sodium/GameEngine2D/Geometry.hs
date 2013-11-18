@@ -38,6 +38,15 @@ rectWidth (_, (w, _)) = w*2
 rectHeight :: Rect -> Coord
 rectHeight (_, (_, h)) = h*2
 
+rectAspect :: Rect -> Coord
+rectAspect (_, (w, h)) = w/h
+
+rectOrig :: Rect -> Point
+rectOrig (orig, _) = orig
+
+rectSize :: Rect -> Vector
+rectSize (_, size) = size
+
 -- | Drop the specified amount off the left of the rectangle.
 dropLeft :: Coord -> Rect -> Rect
 dropLeft chop rect = translateRect (chop*0.5, 0) . scaleRect ((w-chop)/w, 1) $ rect
