@@ -66,11 +66,19 @@ foreign import javascript unsafe "requestAnimFrame($1)"
 foreign import javascript unsafe "window.addEventListener('resize',$1);"
     onWindowResize :: JSFun (IO ()) -> IO ()
 
+{-
 foreign import javascript unsafe "getWindowWidth()"
     windowWidth :: IO Float
 
 foreign import javascript unsafe "getWindowHeight()"
     windowHeight :: IO Float
+    -}
+
+foreign import javascript unsafe "$1.offsetWidth"
+    canvasWidth :: Element -> IO Float
+
+foreign import javascript unsafe "$1.offsetHeight"
+    canvasHeight :: Element -> IO Float
 
 foreign import javascript unsafe "resizeViewport($1,$2,$3)"
     resizeViewport :: Element -> Float -> Float -> IO ()
@@ -127,8 +135,9 @@ instance Platform WebGL where
     type Touch WebGL = ()
 
     engine (WebGLArgs resPath) game = do
-        width0 <- windowWidth
-        height0 <- windowHeight
+        canvas <- getElementById "mycanvas"
+        width0 <- canvasWidth canvas
+        height0 <- canvasHeight canvas
         (viewport, sendViewport) <- sync $ newBehavior (width0, height0)
         let aspect = uncurry (/) <$> viewport
 
@@ -139,8 +148,6 @@ instance Platform WebGL where
         (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
         spriteRef <- newIORef =<< (Just <$> sync (sample bSprite))
         kill <- sync $ listen (updates bSprite) (writeIORef spriteRef . Just)
-
-        canvas <- getElementById "mycanvas"
 
         let scaleClick (xx, yy) = do
                 (width, height) <- sync $ sample viewport
@@ -166,13 +173,14 @@ instance Platform WebGL where
             sync $ sendMouse $ MouseMove () pt
 
         or <- syncCallback True False $ do
-            w <- windowWidth
-            h <- windowHeight
+            w <- canvasWidth canvas
+            h <- canvasHeight canvas
             resizeViewport canvas w h
             sync $ sendViewport (w,h)
         onWindowResize or
 
         gl <- initGL canvas md mu mm
+        resizeViewport canvas width0 height0
 
         t0 <- getCurrentTime
         tLastEndRef <- newIORef =<< getTime t0

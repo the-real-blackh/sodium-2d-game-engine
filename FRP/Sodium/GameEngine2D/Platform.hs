@@ -27,6 +27,14 @@ mousePosition (MouseDown _ pt) = pt
 mousePosition (MouseMove _ pt) = pt
 mousePosition (MouseUp _ pt) = pt
 
+-- | Like 'gate' except it only blocks mouse down events, otherwise we get weird
+-- effects.
+gateMouse :: Event (MouseEvent p) -> Behavior Bool -> Event (MouseEvent p)
+gateMouse e b = filterJust $ snapshotWith fmouse e b
+  where
+    fmouse (MouseDown _ _) False = Nothing
+    fmouse m _                   = Just m
+
 type Game p = Event (MouseEvent p)
            -> Behaviour Double
            -> StdGen

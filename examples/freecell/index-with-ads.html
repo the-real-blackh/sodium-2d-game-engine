@@ -1,0 +1,239 @@
+<html style="height:100%">
+
+<head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="gl-matrix-min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+
+<script language="javascript" src="all.js"></script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    void main(void) {
+        gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+
+    varying vec2 vTextureCoord;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+        vTextureCoord = aTextureCoord;
+    }
+</script>
+
+<script type="text/javascript">
+
+    function resizeViewport(canvas, width, height)
+    {
+        canvas.width = width;
+        canvas.height = height;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        mat4.identity(pMatrix);
+        mat4.scale(pMatrix, pMatrix, [0.001 * height / width, 0.001, 1]);
+        gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
+    }
+
+    function initGL(canvas, handleMouseDown, handleMouseUp, handleMouseMove) {
+        try {
+            gl = canvas.getContext("webgl");
+        }
+        catch (x) { gl = null; }
+        if (gl == null) {
+            try {
+                gl = canvas.getContext("experimental-webgl");
+            }
+            catch (x) { gl = null; }
+        }
+        if (!gl) {
+            alert("Could not initialise WebGL, sorry :-(");
+        }
+
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.BLEND);
+
+        vShader = createShaderFromScriptElement(gl, "shader-vs");
+        fShader = createShaderFromScriptElement(gl, "shader-fs");
+        var program = createProgram(gl, [vShader, fShader]);
+        gl.useProgram(program);
+
+        pos = gl.getAttribLocation(program, "aVertexPosition");
+        pMatrixUniform = gl.getUniformLocation(program, "uPMatrix");
+        mvMatrixUniform = gl.getUniformLocation(program, "uMVMatrix");
+
+        resizeViewport(canvas, getWindowWidth(), getWindowHeight());
+
+        texCoordAttr = gl.getAttribLocation(program, "aTextureCoord");
+        gl.enableVertexAttribArray(texCoordAttr);
+        samplerUniform = gl.getUniformLocation(program, "uSampler");
+
+        texCoords = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
+        var textureCoords = [
+          // Front face
+          0.0, 0.0,
+          1.0, 0.0,
+          0.0, 1.0,
+          1.0, 1.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+        texCoords.itemSize = 2;
+        texCoords.numItems = 4;
+
+        squareBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareBuf);
+        var vertices = [
+            -1.0,  1.0,  0.0,
+             1.0,  1.0,  0.0,
+            -1.0, -1.0,  0.0,
+             1.0, -1.0,  0.0
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        squareBuf.itemSize = 3;
+        squareBuf.numItems = 4;
+
+        canvas.onmousedown = function(event) { handleMouseDown(event.clientX, event.clientY); }
+        document.onmouseup = function(event) { handleMouseUp(event.clientX, event.clientY); }
+        document.onmousemove = function(event) { handleMouseMove(event.clientX, event.clientY); }
+        
+        prepareImage();
+
+        return gl;
+    }
+
+    var gl;
+    var pos;
+    var pMatrixUniform;
+    var mvMatrixUniform;
+    var pMatrix = mat4.create();
+    var mvMatrix = mat4.create();
+    var samplerUniform;
+    var vShader;
+    var fShader;
+    var program;
+    var texCoordAttr;
+    var texCoords;
+
+    function loadImage(fn)
+    {
+        var tex = gl.createTexture();
+        tex.loaded = false;
+        tex.image = new Image();
+        tex.image.onload = function() {
+            handleLoadedTexture(gl,tex)
+        }
+        tex.image.src = fn;
+        return tex;
+    }
+
+    function handleLoadedTexture(gl,tex) {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        tex.loaded = true;
+    }
+
+    function prepareImage()
+    {
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoords);
+        gl.vertexAttribPointer(texCoordAttr, texCoords.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.activeTexture(gl.TEXTURE0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, squareBuf);
+        gl.enableVertexAttribArray(pos);
+        gl.vertexAttribPointer(pos, squareBuf.itemSize, gl.FLOAT, false, 0, 0);
+    }
+
+    function drawImage(tex, x, y, w, h)
+    {
+        if (tex.loaded) {
+            //prepareImage();
+    
+            mat4.identity(mvMatrix);
+            mat4.translate(mvMatrix, mvMatrix, [x, y, 0]);
+            mat4.scale(mvMatrix, mvMatrix, [w, h, 1]);
+    
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.uniform1i(samplerUniform, 0);
+            gl.uniformMatrix4fv(mvMatrixUniform, false, mvMatrix);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareBuf.numItems);
+        }
+    }
+
+    function destroyImage(tex)
+    {
+        gl.deleteTexture(tex);
+    }
+
+    function getWindowWidth()
+    {
+      if (typeof (window.innerWidth) == 'number')
+        return window.innerWidth;
+      else {
+        if (document.documentElement && (document.documentElement.clientWidth || document.documentElement.clientHeight))
+          return document.documentElement.clientWidth;
+        else {
+          if (document.body && (document.body.clientWidth || document.body.clientHeight))
+            return document.body.clientWidth;
+          else
+            alert("no window width");
+        }
+      }
+    }
+
+    function getWindowHeight()
+    {
+      if (typeof (window.innerHeight) == 'number')
+        return window.innerHeight;
+      else {
+        if (document.documentElement && (document.documentElement.clientHeight || document.documentElement.clientHeight))
+          return document.documentElement.clientHeight;
+        else {
+          if (document.body && (document.body.clientHeight || document.body.clientHeight))
+            return document.body.clientHeight;
+          else
+            alert("no window width");
+        }
+      }
+    }
+</script>
+
+<meta name="viewport" content="width=device-width">
+</head>
+
+<body onload="h$main(h$mainZCMainzimain);" style="margin:0px;width:100%;height:100%">
+<body>
+<div style="display:table;width:100%;height:100%">
+<div style="display:table-row"><canvas id="mycanvas" style="border:none;width:100%;height:100%"></canvas></div>
+<div style="display:table-row;height:60px"><script type="text/javascript"><!--
+google_ad_client = "ca-pub-6835969820123285";
+/* Ad1 */
+google_ad_slot = "9863211248";
+google_ad_width = 468;
+google_ad_height = 60;
+//-->
+</script>
+<script type="text/javascript" src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
+</script>
+</div>
+</div>
+</body>
+
+</html>

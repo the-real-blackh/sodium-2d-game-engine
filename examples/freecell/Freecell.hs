@@ -49,9 +49,11 @@ data Resources p = Resources {
         reDraw       :: Card -> Drawable p,
         reEmptySpace :: Drawable p,
         reBackground :: Drawable p,
+        reHelpText   :: Drawable p,
         reNewGame    :: ButtonImage p,
         reRestart    :: ButtonImage p,
-        reUndo       :: ButtonImage p
+        reUndo       :: ButtonImage p,
+        reHelp       :: ButtonImage p
     }
 
 loadResources :: Platform p => IO (Resources p)
@@ -64,11 +66,13 @@ loadResources =
                            draw card = fromJust $ M.lookup card cardsM
                        return draw
                   )
-              <*>image "empty-space.png"
+              <*> image "empty-space.png"
               <*> image "background.jpg"
+              <*> image "help.png"
               <*> (ButtonImage <$> image "new-game.up.png" <*> image "new-game.dn.png" <*> pure (140 / 29))
               <*> (ButtonImage <$> image "restart.up.png"  <*> image "restart.dn.png"  <*> pure (108 / 29))
               <*> (ButtonImage <$> image "undo.up.png"     <*> image "undo.dn.png"     <*> pure (90 / 30))
+              <*> (ButtonImage <$> image "help.up.png"     <*> image "help.dn.png"     <*> pure (84 / 30))
 
 data Suit  = Spades | Clubs | Diamonds | Hearts
              deriving (Eq, Ord, Show, Enum, Bounded)
@@ -471,6 +475,28 @@ undoHandler state eDragStart eDragEnd eOtherUpdate eUndo = do
 
     return $ snd <$> ePop
 
+helpPage :: Platform p =>
+            Resources p
+         -> Event ()
+         -> Event (MouseEvent p)
+         -> Behavior Rect
+         -> Reactive (Behavior (Sprite p), Event (MouseEvent p))
+helpPage res eHelp eMouse screen = do
+    active <- hold False $ (const True <$> eHelp)
+              `merge` (filterJust $ fmap (\me -> case me of
+                                                     MouseDown _ _ -> Just False
+                                                     _             -> Nothing) eMouse)
+    return (liftA2 draw active screen, gateMouse eMouse (not <$> active))
+  where
+    draw active screen =
+        if active
+            then reHelpText res $ fitAspect (640/400) CentreJ
+                            $ dropLeftP xmar $ dropRightP xmar
+                            $ dropTopP  ymar $ dropBottomP ymar $ screen
+            else mempty
+    xmar = 20
+    ymar = 20
+
 game :: Platform p =>
         Resources p
      -> Behavior Coord  -- ^ Aspect ratio
@@ -483,7 +509,6 @@ game :: Platform p =>
             Event (Sound p)
         )
 game res aspect eMouse0 time rng0 = do
-    (eDblClick, eMouse) <- detectDoubleClick eMouse0 time
     let screen = flip fmap aspect $ \aspect -> marginRect 90 ((0,0),(1000*(min 1.3 aspect),1000))
         buttonArea = takeTopP 50 . takeTopP 9 <$> screen
         board = takeBottomP 91 <$> screen
@@ -501,11 +526,18 @@ game res aspect eMouse0 time rng0 = do
         restartRect = fitAspect (biAspect (reRestart res)) LeftJ <$> buttonArea'
         buttonArea'' = (\ng -> dropLeft (rectWidth ng) . dropLeft 50) <$> restartRect <*> buttonArea'
         undoRect    = fitAspect (biAspect (reUndo res)) LeftJ <$> buttonArea''
+        buttonArea''' = (\ng -> dropLeft (rectWidth ng) . dropLeft 50) <$> undoRect <*> buttonArea''
+        helpRect    = fitAspect (biAspect (reHelp res)) RightJ <$> buttonArea'''
 
-    (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse0
-    (restartSpr, eRestart, restartSnd) <- button (reRestart res) restartRect eMouse0
-    (undoSpr,    eUndo,    undoSnd)    <- button (reUndo res) undoRect eMouse0
-    let buttonsSpr = liftA3 (\a b c -> a `mappend` b `mappend` c) newGameSpr restartSpr undoSpr
+    rec
+        (helpPageSpr, eMouse1) <- helpPage res eHelp eMouse0 screen
+        (eDblClick, eMouse) <- detectDoubleClick eMouse1 time
+        (helpSpr, eHelp, helpSnd) <- button (reHelp res) helpRect eMouse1
+
+    (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse1
+    (restartSpr, eRestart, restartSnd) <- button (reRestart res) restartRect eMouse1
+    (undoSpr,    eUndo,    undoSnd)    <- button (reUndo res) undoRect eMouse1
+    let buttonsSpr = mconcat <$> sequenceA [newGameSpr, restartSpr, undoSpr, helpSpr]
 
     eNewGameSt <- collectE (\() rng -> mkStackCards rng) rng1 eNewGame
 
@@ -558,7 +590,7 @@ game res aspect eMouse0 time rng0 = do
     return (
         mconcat
         . (reBackground res ((0,0),(bgAspect * 1000, 1000)):)
-        <$> sequenceA ([buttonsSpr] ++ stSprites ++ ceSprites ++ [grSprites, drSprites]),
+        <$> sequenceA ([buttonsSpr] ++ stSprites ++ ceSprites ++ [grSprites, drSprites, helpPageSpr]),
         pure ("", []),
         never
       )

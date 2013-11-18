@@ -17,7 +17,6 @@ flag ghcjs
 
 library
   exposed-modules:
-        FRP.Sodium.GameEngine2D.Game
         FRP.Sodium.GameEngine2D.Geometry
         FRP.Sodium.GameEngine2D.Orientation
         FRP.Sodium.GameEngine2D.Cache

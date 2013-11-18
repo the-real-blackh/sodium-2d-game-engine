@@ -2,7 +2,6 @@
 module Button where
 
 import FRP.Sodium.GameEngine2D.Platform
-import FRP.Sodium.GameEngine2D.Game (gateMouse)
 import FRP.Sodium.GameEngine2D.Geometry
 import FRP.Sodium
 import Data.Maybe
