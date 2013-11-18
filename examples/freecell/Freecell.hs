@@ -14,11 +14,14 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
-import System.Random
+import Data.Sequence (Seq, (<|))
+import qualified Data.Sequence as Seq 
+import System.Random hiding (split)
 import System.FilePath
 import Data.Array.IArray as A
 import Data.Array.ST
 import Data.Text (Text)
+import Debug.Trace
 
 
 freecell :: Platform p => IO (Behavior Coord -> Game p)
@@ -110,6 +113,9 @@ noOfStacks = 8
 noOfCells :: Int
 noOfCells = 4
 
+noOfGraves :: Int
+noOfGraves = 4
+
 cardSize :: Rect -> Vector
 cardSize board = (0.0495 * w, 0.07425 * w)
   where w = rectWidth board
@@ -183,14 +189,30 @@ stackTop :: Rect -> Coord
 stackTop board = topRow board - cardHeight * 2.5
   where (_, cardHeight) = cardSize board
 
+data GameState = GameState {
+        gsStacks0 :: [[Card]],  -- Cards stacks as at the start of the game
+        gsStacks  :: [[Card]],  -- Card stacks now
+        gsCells   :: [Maybe Card],
+        gsGrave   :: [Maybe Card]
+    }
+    deriving Show
+
+mkGameState :: [[Card]] -> GameState
+mkGameState cards = GameState cards cards (replicate noOfCells Nothing) (replicate noOfGraves Nothing)
+
 -- | The vertical stacks of cards, where cards can only be added if they're
 -- descending numbers and alternating red-black.
 stack :: Platform p =>
          Behavior Rect
       -> (Card -> Drawable p)
-      -> Event (MouseEvent p) -> [Card] -> Location -> Behavior Int -> Event [Card]
-      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch)
-stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
+      -> Event (MouseEvent p)
+      -> [Card]
+      -> Location
+      -> Behavior Int
+      -> Event [Card]
+      -> Event [Card]
+      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch, Behavior [Card])
+stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eSetState = do
     let orig board =
             let (cardWidth, cardHeight) = cardSize board
             in  (
@@ -199,7 +221,7 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
                 )
         positions board = iterate (\(x, y) -> (x, y-overlapY board)) (orig board)
     rec
-        cards <- hold initCards (eRemoveCards `merge` eAddCards)
+        cards <- hold initCards (eRemoveCards `merge` eAddCards `merge` eSetState)
         let eAddCards = snapshotWith (\newCards cards -> cards ++ newCards) eDrop cards
             eMouseSelection = filterJust $ snapshotWith (\mev (cards, board) ->
                     let (cardWidth, cardHeight) = cardSize board
@@ -233,30 +255,35 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop = do
                             _  -> last cards `follows` head newCards
                 }
             ) <$> cards <*> freeSpaces <*> board
-    return (sprites, dest, eDrag)
+    return (sprites, dest, eDrag, cards)
 
 -- | The "free cells" where cards can be temporarily put.
 cell :: Platform p =>
         Behavior Rect
      -> (Card -> Drawable p)
      -> Drawable p
-     -> Event (MouseEvent p) -> Location -> Event [Card]
-     -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch, Behavior Int)
-cell board draw emptySpace eMouse loc@(Cell ix) eDrop = do
+     -> Event (MouseEvent p)
+     -> Location
+     -> Event [Card]
+     -> Event (Maybe Card)
+     -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch, Behavior Int, Behavior (Maybe Card))
+cell board draw emptySpace eMouse loc@(Cell ix) eDrop0 eSetState = do
     let orig board =
             let narrow = cardSpacingNarrow board
                 (cardWidth, _) = cardSize board
             in  (xMin board + fromIntegral ix * narrow, topRow board)
         rect board = (orig board, cardSize board)
+        eDrop = Just . head <$> eDrop0
     rec
-        mCard <- hold Nothing $ eRemove `merge` (Just . head <$> eDrop)
+        mCard <- hold Nothing $ eDragRemove `merge` eDrop `merge` eSetState
+
         let eMouseSelection = filterJust $ snapshotWith (\mev (mCard, board) ->
                     case (mev, mCard) of
                         (MouseDown _ pt, Just card) | pt `inside` rect board ->
                             Just (Nothing, Bunch (orig board) pt [card] loc)
                         _ -> Nothing
                 ) eMouse (liftA2 (,) mCard board)
-            eRemove = fst <$> eMouseSelection
+            eDragRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
     let sprites = (\mCard board -> case mCard of
                                        Just card -> draw card (orig board, cardSize board)
@@ -268,16 +295,19 @@ cell board draw emptySpace eMouse loc@(Cell ix) eDrop = do
                 deMayDrop = \newCards -> length newCards == 1 && isNothing mCard
             }) <$> mCard <*> board
         emptySpaces = (\c -> if isNothing c then 1 else 0) <$> mCard
-    return (sprites, dest, eDrag, emptySpaces)
+    return (sprites, dest, eDrag, emptySpaces, mCard)
 
 -- | The place where the cards end up at the top right, aces first.
 grave :: Platform p =>
          Behavior Rect
       -> (Card -> Drawable p)
       -> Drawable p
-      -> Event (MouseEvent p) -> Event [Card]
-      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch)
-grave board draw emptySpace eMouse eDrop = do
+      -> Event (MouseEvent p)
+      -> Event [Card]
+      -> Event [Maybe Card]
+      -> Reactive (Behavior (Sprite p), Behavior Destination, Event Bunch,
+                   Behavior [Maybe Card])
+grave board draw emptySpace eMouse eDrop eSetState = do
     let xOf board ix =    let (cardWidth, _) = cardSize board
                               in  xMax board - cardSpacingNarrow board * fromIntegral (3-ix)
         positions board = map (\ix -> (xOf board ix, topRow board)) [0..3]
@@ -293,7 +323,7 @@ grave board draw emptySpace eMouse eDrop = do
                         ix = fromEnum suit
                     in  take ix slots ++ [Just newCard] ++ drop (ix+1) slots 
                 ) eDrop slots
-        slots <- hold [Nothing, Nothing, Nothing, Nothing] (eDropModify `merge` eRemove)
+        slots <- hold (replicate noOfGraves Nothing) (eDropModify `merge` eDragRemove `merge` eSetState)
         let eMouseSelection = filterJust $ snapshotWith (\mev (slots, board) ->
                     case mev of
                         MouseDown _ pt ->
@@ -310,7 +340,7 @@ grave board draw emptySpace eMouse eDrop = do
                                     Nothing -> Nothing
                         _ -> Nothing
                 ) eMouse (liftA2 (,) slots board)
-            eRemove = fst <$> eMouseSelection
+            eDragRemove = fst <$> eMouseSelection
             eDrag = snd <$> eMouseSelection
     let sprites = (
             \board slots ->
@@ -329,7 +359,7 @@ grave board draw emptySpace eMouse eDrop = do
                                 Nothing                -> value == Ace 
                     _                    -> False
             }) <$> slots <*> board 
-    return (sprites, dest, eDrag)
+    return (sprites, dest, eDrag, slots)
   where
     -- Index of first true item in the list
     trueIxOf items = doit items 0
@@ -369,15 +399,16 @@ dragger board draw eMouse eStartDrag = do
     cardPos pt bunch = (pt `minus` buInitMousePos bunch) `plus` buInitOrig bunch
 
 -- | Determine where dropped cards are routed to.
-dropper :: Event (Point, Bunch) -> Behavior [Destination] -> Event (Location, [Card])
+-- Bool value is True if this is a successful drag, false if it's a snap back to origin.
+dropper :: Event (Point, Bunch) -> Behavior [Destination] -> Event (Bool, (Location, [Card]))
 dropper eDrop dests =
     snapshotWith (\(pt, bunch) dests ->
                 -- If none of the destinations will accept the dropped cards, then send them
                 -- back where they originated from.
-                let findDest [] = (buOrigin bunch, buCards bunch)
+                let findDest [] = (False, (buOrigin bunch, buCards bunch))
                     findDest (dest:rem) =
                         if pt `inside` deDropZone dest && deMayDrop dest (buCards bunch)
-                            then (deLocation dest, buCards bunch)
+                            then (True, (deLocation dest, buCards bunch))
                             else findDest rem
                 in  findDest dests
             ) eDrop dests
@@ -390,6 +421,37 @@ distributeTo eWhere locations = flip map locations $ \thisLoc ->
                 else Nothing
         ) <$> eWhere
 
+maxUndos :: Int
+maxUndos = 50
+
+undoHandler :: Behavior GameState
+            -> Event ()                 -- ^ Drag start
+            -> Event ()                 -- ^ Drag end
+            -> Event ()                 -- ^ Other state update (other than drag end)
+            -> Event ()                 -- ^ Undo button clicked
+            -> Reactive (Event GameState)
+undoHandler state eDragStart eDragEnd eOtherUpdate eUndo = do
+    capturedState <- hold Nothing $ Just <$> snapshot eDragStart state
+    rec
+        undos <- hold Seq.empty (ePush `merge` (fst <$> ePop))
+
+        let eUpdate = snapshot eDragEnd capturedState `merge`
+                      snapshot eOtherUpdate (Just <$> state)
+
+            ePush = snapshotWith (\mState undos ->
+                    case mState of
+                        Just state -> Seq.take maxUndos (state <| undos)
+                        Nothing    -> undos
+                ) eUpdate undos
+
+            ePop = filterJust $ snapshotWith (\_ undos ->
+                    if Seq.null undos
+                        then Nothing
+                        else Just (Seq.drop 1 undos, Seq.index undos 0)
+                ) eUndo undos
+
+    return $ snd <$> ePop
+
 game :: Platform p =>
         Resources p
      -> Behavior Coord  -- ^ Aspect ratio
@@ -401,15 +463,16 @@ game :: Platform p =>
             Behavior (Text, [Sound p]),
             Event (Sound p)
         )
-game res aspect eMouse time rng = do
+game res aspect eMouse time rng0 = do
     let screen = flip fmap aspect $ \aspect -> marginRect 90 ((0,0),(1000*(min 1.3 aspect),1000))
         buttonArea = takeTopP 50 . takeTopP 9 <$> screen
         board = takeBottomP 91 <$> screen
         draw = reDraw res
         emptySpace = reEmptySpace res
-        stackCards =
-            let (cards, _) = shuffle rng [minBound..maxBound]
-            in  toStacks noOfStacks cards
+        mkStackCards rng0 =
+            let (cards, rng1) = shuffle rng0 [minBound..maxBound]
+            in  (toStacks noOfStacks cards, rng1)
+        (stackCards00, rng1) = mkStackCards rng0
         stLocs = map Stack [0..noOfStacks-1]
         ceLocs = map Cell [0..noOfCells-1]
 
@@ -424,21 +487,49 @@ game res aspect eMouse time rng = do
     (undoSpr,    eUndo,    undoSnd)    <- button (reUndo res) undoRect eMouse
     let buttonsSpr = liftA3 (\a b c -> a `mappend` b `mappend` c) newGameSpr restartSpr undoSpr
 
+    eNewGameSt <- collectE (\() rng -> mkStackCards rng) rng1 eNewGame
+
     rec
-        let eWhere = dropper eDrop (sequenceA (stDests ++ ceDests ++ [grDest]))
+        -- The cards as they were at the start of this game.
+        stackCards0 <- hold stackCards00 $ eNewGameSt `merge` (gsStacks0 <$> eSetState)
+
+        let eWhereSucc = dropper eDrop (sequenceA (stDests ++ ceDests ++ [grDest]))
+            eWhere  = snd <$> eWhereSucc
             stDrops = eWhere `distributeTo` stLocs
             ceDrops = eWhere `distributeTo` ceLocs
             grDrops = eWhere `distributeTo` [Grave]
-        (stSprites, stDests, stDrags) <- unzip3 <$> forM (zip3 stLocs stackCards stDrops) (\(loc, cards, drop) ->
-            stack board draw eMouse cards loc emptySpaces drop)
-        (ceSprites, ceDests, ceDrags, ceEmptySpaces) <- unzip4 <$> forM (zip ceLocs ceDrops) (\(loc, drop) ->
-            cell board draw emptySpace eMouse loc drop)
-        (grSprites, grDest, grDrag) <- grave board draw emptySpace eMouse (head grDrops)
+            eSuccessfulDrop = filterJust $ fmap (\(success, _) ->
+                if success then Just () else Nothing) eWhereSucc
+
+        eUndoSt <- undoHandler gameState (const () <$> eDrag) eSuccessfulDrop
+                                         (const () <$> eNewGameSt `merge` eRestartSt) eUndo
+        let eRestartSt = snapshot eRestart stackCards0
+            eSetState = eUndoSt `merge` (mkGameState <$> (eRestartSt `merge` eNewGameSt))
+
+        let eSetStackStates = map (\i -> (!! i) . gsStacks <$> eSetState) [0..noOfStacks-1]
+        (stSprites, stDests, stDrags, stStates) <-
+            unzip4 <$> forM (zip4 stLocs stackCards00 stDrops eSetStackStates) (\(loc, cards, drop, eSet) ->
+                stack board draw eMouse cards loc emptySpaces drop eSet)
+
+        let eSetCellStates = map (\i -> (!! i) . gsCells <$> eSetState) [0..noOfCells-1]
+        (ceSprites, ceDests, ceDrags, ceEmptySpaces, ceStates) <-
+            unzip5 <$> forM (zip3 ceLocs ceDrops eSetCellStates) (\(loc, drop, eSet) ->
+                cell board draw emptySpace eMouse loc drop eSet)
+
+        (grSprites, grDest, grDrag, grState) <-
+            grave board draw emptySpace eMouse (head grDrops) (gsGrave <$> eSetState)
+
+        let gameState = GameState <$> stackCards0
+                                  <*> sequenceA stStates
+                                  <*> sequenceA ceStates
+                                  <*> grState
+
         -- The total number of empty spaces available in cells - 0 to 4. We need to
         -- know this when we drop a stack of cards, because (the rules of the game say)
         -- this is equivalent to temporarily putting all but one of them in cells.
         let emptySpaces = foldr1 (\x y -> (+) <$> x <*> y) ceEmptySpaces
-        (drSprites, eDrop) <- dragger board draw eMouse (foldr1 merge (stDrags ++ ceDrags ++ [grDrag]))
+            eDrag = foldr1 merge (stDrags ++ ceDrags ++ [grDrag])
+        (drSprites, eDrop) <- dragger board draw eMouse eDrag
     return (
         mconcat
         . (reBackground res ((0,0),(bgAspect * 1000, 1000)):)
@@ -475,4 +566,3 @@ toStacks noOfStacks cards = foldl (\stacks layer ->
     layerize cards = case splitAt noOfStacks cards of
         ([], _) -> []
         (layer, rem) -> layer : layerize rem
-
