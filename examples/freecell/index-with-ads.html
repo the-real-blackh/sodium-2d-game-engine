@@ -161,24 +161,27 @@
     {
         var tex = gl.createTexture();
         tex.loaded = false;
+        tex.deleted = false;
         tex.image = new Image();
         if (bg) {
             tex.image.onload = function() {
-                tex.imgWidth = tex.image.width;
-                tex.imgHeight = tex.image.height;
-                var newCanvas = document.createElement("canvas");
-                newCanvas.width = 1024;
-                newCanvas.height = 1024;
-                var ctx = newCanvas.getContext("2d");
-                ctx.drawImage(tex.image, 0, 0, newCanvas.width, newCanvas.height);
-                tex.image = new Image();
-                // here is the most important part because if you dont replace you will get a DOM 18 exception.
-                tex.image.src = newCanvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-                tex.image.onload = function () { handleLoadedTexture(gl,tex); }
+                if (!tex.deleted) {
+                    tex.imgWidth = tex.image.width;
+                    tex.imgHeight = tex.image.height;
+                    var newCanvas = document.createElement("canvas");
+                    newCanvas.width = 1024;
+                    newCanvas.height = 1024;
+                    var ctx = newCanvas.getContext("2d");
+                    ctx.drawImage(tex.image, 0, 0, newCanvas.width, newCanvas.height);
+                    tex.image = new Image();
+                    // here is the most important part because if you dont replace you will get a DOM 18 exception.
+                    tex.image.src = newCanvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+                    tex.image.onload = function () { handleLoadedTexture(gl,tex); }
+                }
             };
         }
         else {
-            tex.image.onload = function() { handleLoadedTexture(gl,tex) };
+            tex.image.onload = function() { if (!tex.deleted) handleLoadedTexture(gl,tex) };
         }
         tex.image.src = fn;
         return tex;
@@ -249,6 +252,7 @@
 
     function destroyImage(tex)
     {
+        tex.deleted = true;
         gl.deleteTexture(tex);
     }
 
