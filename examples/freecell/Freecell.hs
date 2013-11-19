@@ -513,8 +513,9 @@ helpPage res eHelp eMouse screen = do
 backgroundChanger :: Platform p =>
                      Resources p
                   -> Behavior Double
+                  -> Behavior Coord
                   -> Reactive (Behavior (Sprite p))
-backgroundChanger res time = do
+backgroundChanger res time aspect = do
     t0 <- sample time
     rec
         bgs <- hold (t0, cycle (reBackgrounds res)) eChange
@@ -523,10 +524,13 @@ backgroundChanger res time = do
                                   then Just (t, bgs')
                                   else Nothing
                           ) (updates time) bgs
-    return $ flip fmap bgs $ \(_, (bg1:bg2:_)) ->
-        bgResource bg1 ((0,0),(bgAspect bg1 * 1000, 1000)) `mappend`
-        -- display the second one invisibly so it'll be loaded by the time we get to it
-        invisible (bgResource bg2 ((0,0),(0,0)))
+    return $ liftA2 (\(_, (bg1:bg2:_)) aspect ->
+        let screen = ((0,0),(aspect*1000,1000))
+        in
+            bgResource bg1 (coverAspect (bgAspect bg1) screen) `mappend`
+            -- display the second one invisibly so it'll be loaded by the time we get to it
+            invisible (bgResource bg2 ((0,0),(0,0)))
+      ) bgs aspect
 
 game :: Platform p =>
         Resources p
@@ -541,7 +545,7 @@ game :: Platform p =>
         )
 game res aspect eMouse0 time rng0 = do
 
-    bgSpr <- backgroundChanger res time
+    bgSpr <- backgroundChanger res time aspect
 
     let screen = flip fmap aspect $ \aspect -> marginRect 90 ((0,0),(1000*(min 1.3 aspect),1000))
         buttonArea = takeTopP 50 . takeTopP 9 <$> screen

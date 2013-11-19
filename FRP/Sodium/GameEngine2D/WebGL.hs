@@ -4,6 +4,7 @@
 module FRP.Sodium.GameEngine2D.WebGL where
 
 import FRP.Sodium.GameEngine2D.Cache
+import FRP.Sodium.GameEngine2D.CleanMouse
 import FRP.Sodium.GameEngine2D.Geometry
 import FRP.Sodium.GameEngine2D.Platform
 
@@ -145,7 +146,9 @@ instance Platform WebGL where
         (realTime, sendRealTime) <- sync $ newBehavior 0
         rng <- newStdGen
         (eMouse, sendMouse) <- sync newEvent
-        (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
+        (bSprite, bMusic, eEffects) <- sync $ do
+            eCleanMouse <- cleanMouse eMouse
+            game aspect eCleanMouse time rng
         spriteRef <- newIORef =<< (Just <$> sync (sample bSprite))
         kill <- sync $ listen (updates bSprite) (writeIORef spriteRef . Just)
 
