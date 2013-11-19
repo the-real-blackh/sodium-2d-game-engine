@@ -1,5 +1,5 @@
 {-# LANGUAGE RecursiveDo, OverloadedStrings, TupleSections #-}
-module Freecell (freecell) where
+module Freecell (freecell, Background(..)) where
 
 import Button
 import Gesture
@@ -25,8 +25,8 @@ import Data.Text (Text)
 import Debug.Trace
 
 
-freecell :: Platform p => IO (Behavior Coord -> Game p)
-freecell = game <$> loadResources
+freecell :: Platform p => [Background FilePath] -> IO (Behavior Coord -> Game p)
+freecell bgFiles = game <$> loadResources bgFiles
 
 data ButtonImage p = ButtonImage {
         biUp :: Drawable p,
@@ -45,19 +45,25 @@ button bi rect eMouse = plainButton (pure Enabled) rect draw eMouse
         if sel then biDown bi rect `mappend` invisible (biUp bi rect)
                else biUp bi rect `mappend` invisible (biDown bi rect)
 
-data Resources p = Resources {
-        reDraw       :: Card -> Drawable p,
-        reEmptySpace :: Drawable p,
-        reBackground :: Drawable p,
-        reHelpText   :: Drawable p,
-        reNewGame    :: ButtonImage p,
-        reRestart    :: ButtonImage p,
-        reUndo       :: ButtonImage p,
-        reHelp       :: ButtonImage p
+data Background r = Background {
+        bgResource :: r,
+        bgAspect   :: Coord,
+        bgDuration :: Double
     }
 
-loadResources :: Platform p => IO (Resources p)
-loadResources =
+data Resources p = Resources {
+        reDraw        :: Card -> Drawable p,
+        reEmptySpace  :: Drawable p,
+        reBackgrounds :: [Background (Drawable p)],
+        reHelpText    :: Drawable p,
+        reNewGame     :: ButtonImage p,
+        reRestart     :: ButtonImage p,
+        reUndo        :: ButtonImage p,
+        reHelp        :: ButtonImage p
+    }
+
+loadResources :: Platform p => [Background FilePath] -> IO (Resources p)
+loadResources bgFiles =
     Resources <$> (do
                        cards <- forM [minBound..maxBound] $ \card -> do
                            i <- image (cardFn card)
@@ -67,7 +73,11 @@ loadResources =
                        return draw
                   )
               <*> image "empty-space.png"
-              <*> image "background.jpg"
+              <*> (do
+                       forM bgFiles $ \f -> do
+                           i <- image (bgResource f)
+                           return $ Background i (bgAspect f) (bgDuration f)
+                  )
               <*> image "help.png"
               <*> (ButtonImage <$> image "new-game.up.png" <*> image "new-game.dn.png" <*> pure (140 / 29))
               <*> (ButtonImage <$> image "restart.up.png"  <*> image "restart.dn.png"  <*> pure (108 / 29))
@@ -500,11 +510,29 @@ helpPage res eHelp eMouse screen = do
     xmar = 10
     ymar = 10
 
+backgroundChanger :: Platform p =>
+                     Resources p
+                  -> Behavior Double
+                  -> Reactive (Behavior (Sprite p))
+backgroundChanger res time = do
+    t0 <- sample time
+    rec
+        bgs <- hold (t0, cycle (reBackgrounds res)) eChange
+        let eChange = filterJust $ snapshotWith (\t (t0, bgs@(bg:bgs')) ->
+                              if t - t0 >= bgDuration bg
+                                  then Just (t, bgs')
+                                  else Nothing
+                          ) (updates time) bgs
+    return $ flip fmap bgs $ \(_, (bg1:bg2:_)) ->
+        bgResource bg1 ((0,0),(bgAspect bg1 * 1000, 1000)) `mappend`
+        -- display the second one invisibly so it'll be loaded by the time we get to it
+        invisible (bgResource bg2 ((0,0),(0,0)))
+
 game :: Platform p =>
         Resources p
      -> Behavior Coord  -- ^ Aspect ratio
      -> Event (MouseEvent p)
-     -> Behaviour Double
+     -> Behavior Double
      -> StdGen
      -> Reactive (
             Behaviour (Sprite p),
@@ -512,6 +540,9 @@ game :: Platform p =>
             Event (Sound p)
         )
 game res aspect eMouse0 time rng0 = do
+
+    bgSpr <- backgroundChanger res time
+
     let screen = flip fmap aspect $ \aspect -> marginRect 90 ((0,0),(1000*(min 1.3 aspect),1000))
         buttonArea = takeTopP 50 . takeTopP 9 <$> screen
         board = takeBottomP 91 <$> screen
@@ -591,14 +622,15 @@ game res aspect eMouse0 time rng0 = do
             eDrag = foldr1 merge (stDrags ++ ceDrags ++ [grDrag])
         (drSprites, eDrop) <- dragger board draw eMouse eDrag
     return (
-        mconcat
-        . (reBackground res ((0,0),(bgAspect * 1000, 1000)):)
-        <$> sequenceA ([buttonsSpr] ++ stSprites ++ ceSprites ++ [grSprites, drSprites, helpPageSpr]),
+        mconcat <$> sequenceA (
+            [bgSpr, buttonsSpr] ++
+            stSprites ++
+            ceSprites ++
+            [grSprites, drSprites, helpPageSpr]
+        ),
         pure ("", []),
         never
       )
-  where
-    bgAspect = 900 / 456
 
 shuffle :: StdGen -> [Card] -> ([Card], StdGen)
 shuffle rng cards =
