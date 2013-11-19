@@ -200,7 +200,7 @@ data GameState = GameState {
         gsCells   :: [Maybe Card],
         gsGrave   :: [Maybe Card]
     }
-    deriving Show
+    deriving (Eq, Show)
 
 mkGameState :: [[Card]] -> GameState
 mkGameState cards = GameState cards cards (replicate noOfCells Nothing) (replicate noOfGraves Nothing)
@@ -463,7 +463,10 @@ undoHandler state eDragStart eDragEnd eOtherUpdate eUndo = do
 
             ePush = snapshotWith (\mState undos ->
                     case mState of
-                        Just state -> Seq.take maxUndos (state <| undos)
+                        Just state ->
+                            if not (Seq.null undos) && Seq.index undos 0 == state
+                                then undos
+                                else Seq.take maxUndos (state <| undos)
                         Nothing    -> undos
                 ) eUpdate undos
 
@@ -494,8 +497,8 @@ helpPage res eHelp eMouse screen = do
                             $ dropLeftP xmar $ dropRightP xmar
                             $ dropTopP  ymar $ dropBottomP ymar $ screen
             else mempty
-    xmar = 20
-    ymar = 20
+    xmar = 10
+    ymar = 10
 
 game :: Platform p =>
         Resources p
