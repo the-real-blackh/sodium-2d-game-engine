@@ -11,7 +11,7 @@ import GHCJS.Types
 import GHCJS.Marshal
 
 
-foreign import javascript unsafe "backgrounds.length"
+foreign import javascript unsafe "'backgrounds' in window ? backgrounds.length : 0"
     getNoOfBackgrounds :: IO Int
 
 foreign import javascript unsafe "backgrounds[$1].file"
@@ -27,5 +27,5 @@ main = do
         Just f <- fromJSRef jf :: IO (Maybe Text)
         d <- getDuration i
         return $ Background (T.unpack f) d
-    game <- freecell bgFiles
+    game <- freecell $ if null bgFiles then [Background "background.jpg" 600] else bgFiles
     engine (WebGLArgs "resources") game

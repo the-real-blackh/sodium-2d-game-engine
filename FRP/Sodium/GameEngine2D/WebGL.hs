@@ -55,6 +55,9 @@ type Element = JSRef Element_
 foreign import javascript unsafe "document.getElementById($1)"
     getElementById :: JSString -> IO Element
 
+foreign import javascript unsafe "startRendering()"
+    startRendering :: IO ()
+
 foreign import javascript unsafe "$1.clearColor($2, $3, $4, $5);"
     clearColor :: GL -> Float -> Float -> Float -> Float -> IO ()
 
@@ -244,7 +247,8 @@ instance Platform WebGL where
                     modifyIORef timeLostRef (+lost)
 
             case mSprite of
-                Just sprite -> do clearColor gl 0 0 0 1
+                Just sprite -> do startRendering
+                                  clearColor gl 0 0 0 1
                                   clear gl
                                   runSprite internals iHeight sprite True
 

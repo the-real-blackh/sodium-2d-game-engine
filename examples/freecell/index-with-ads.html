@@ -47,9 +47,6 @@
         vpWidth = width;
         vpHeight = height;
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        mat4.identity(pMatrix);
-        mat4.scale(pMatrix, pMatrix, [0.001 * height / width, 0.001, 1]);
-        gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
     }
 
     function getNumericStyleProperty(style, prop){
@@ -92,9 +89,6 @@
         if (!gl) {
             alert("Could not initialise WebGL, sorry :-(");
         }
-
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        gl.enable(gl.BLEND);
 
         vShader = createShaderFromScriptElement(gl, "shader-vs");
         fShader = createShaderFromScriptElement(gl, "shader-fs");
@@ -212,11 +206,21 @@
         gl.vertexAttribPointer(pos, squareBuf.itemSize, gl.FLOAT, false, 0, 0);
     }
 
+    function startRendering()
+    {
+        mat4.identity(pMatrix);
+        mat4.scale(pMatrix, pMatrix, [0.001 * vpHeight / vpWidth, 0.001, 1]);
+        gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
+
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.BLEND);
+
+        prepareImage();
+    }
+
     function drawImage(tex, x, y, w, h, bg)
     {
         if (tex.loaded) {
-            prepareImage();
-
             if (bg) {
                 x = 0;
                 y = 0;
