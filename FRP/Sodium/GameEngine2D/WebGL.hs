@@ -264,7 +264,8 @@ instance Platform WebGL where
             return ()
 
         -- Keep callbacks alive
-        threadDelay maxBound
+        forM_ [(0::Int)..] $ \_ -> threadDelay 60000000
+        putStrLn "kill everything!"
         kill
         freeCallback md
         freeCallback mu
