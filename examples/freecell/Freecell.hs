@@ -47,7 +47,6 @@ button bi rect eMouse = plainButton (pure Enabled) rect draw eMouse
 
 data Background r = Background {
         bgResource :: r,
-        bgAspect   :: Coord,
         bgDuration :: Double
     }
 
@@ -76,7 +75,7 @@ loadResources bgFiles =
               <*> (do
                        forM bgFiles $ \f -> do
                            i <- backgroundImage (bgResource f)
-                           return $ Background i (bgAspect f) (bgDuration f)
+                           return $ Background i (bgDuration f)
                   )
               <*> image "help.png"
               <*> (ButtonImage <$> image "new-game.up.png" <*> image "new-game.dn.png" <*> pure (140 / 29))

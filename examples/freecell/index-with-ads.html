@@ -36,8 +36,8 @@
 <script type="text/javascript">
 
     var backgrounds = [
-        { "file":"background.jpg", "aspect":1.98, "duration":10 } /*, 
-        { "file":"s1.png", "aspect":1.98, "duration":10 } */
+        { "file":"background.jpg", "duration":10 } /*, 
+        { "file":"s1.png", "duration":10 } */
     ];
 
     function resizeViewport(canvas, width, height)
@@ -146,8 +146,6 @@
             var offsetpos = element_position(canvas);
             handleMouseMove(event.pageX-offsetpos.x, event.pageY-offsetpos.y); }
         
-        prepareImage();
-
         return gl;
     }
     var gl;
@@ -217,7 +215,7 @@
     function drawImage(tex, x, y, w, h, bg)
     {
         if (tex.loaded) {
-            //prepareImage();
+            prepareImage();
 
             if (bg) {
                 x = 0;
