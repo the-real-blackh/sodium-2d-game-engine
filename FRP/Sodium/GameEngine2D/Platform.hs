@@ -74,6 +74,7 @@ class (Monoid (Sprite p),
     engine :: Args p -> (Behavior Float -> Game p) -> IO ()
     nullDrawable :: Drawable p
     image :: FilePath -> IO (Drawable p)
+    backgroundImage :: FilePath -> IO (Sprite p)
     sound :: FilePath -> IO (Sound p)
     retainSound :: Args p -> Sound p -> IO ()
     translateSprite :: (Coord, Coord) -> Sprite p -> Sprite p

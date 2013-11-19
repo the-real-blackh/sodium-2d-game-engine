@@ -54,7 +54,7 @@ data Background r = Background {
 data Resources p = Resources {
         reDraw        :: Card -> Drawable p,
         reEmptySpace  :: Drawable p,
-        reBackgrounds :: [Background (Drawable p)],
+        reBackgrounds :: [Background (Sprite p)],
         reHelpText    :: Drawable p,
         reNewGame     :: ButtonImage p,
         reRestart     :: ButtonImage p,
@@ -75,7 +75,7 @@ loadResources bgFiles =
               <*> image "empty-space.png"
               <*> (do
                        forM bgFiles $ \f -> do
-                           i <- image (bgResource f)
+                           i <- backgroundImage (bgResource f)
                            return $ Background i (bgAspect f) (bgDuration f)
                   )
               <*> image "help.png"
@@ -527,9 +527,9 @@ backgroundChanger res time aspect = do
     return $ liftA2 (\(_, (bg1:bg2:_)) aspect ->
         let screen = ((0,0),(aspect*1000,1000))
         in
-            bgResource bg1 (coverAspect (bgAspect bg1) screen) `mappend`
+            bgResource bg1 `mappend`
             -- display the second one invisibly so it'll be loaded by the time we get to it
-            invisible (bgResource bg2 ((0,0),(0,0)))
+            invisible (bgResource bg2)
       ) bgs aspect
 
 game :: Platform p =>

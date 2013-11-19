@@ -88,10 +88,10 @@ data Texture_
 type Texture = JSRef Texture_
 
 foreign import javascript unsafe "loadImage"
-    loadImage :: JSString -> IO Texture
+    loadImage :: JSString -> Bool -> IO Texture
 
 foreign import javascript unsafe "drawImage"
-    drawImage :: Texture -> Float -> Float -> Float -> Float -> IO ()
+    drawImage :: Texture -> Float -> Float -> Float -> Float -> Bool -> IO ()
 
 foreign import javascript unsafe "destroyImage"
     destroyImage :: Texture -> IO ()
@@ -111,6 +111,28 @@ animate drawScene = do
 data SpriteState = SpriteState {
         ssInternals  :: Internals WebGL
     }
+
+webGLImage :: Bool -> FilePath -> IO (Drawable WebGL)
+webGLImage background path = do
+    let key = ByteStringKey $ C.pack $ takeFileName path
+    return $ \rect ->
+        let cacheIt = Just $ do
+                resPath <- asks (inResPath . ssInternals)
+                cache <- asks (inCache . ssInternals)
+                liftIO $ writeCache cache key $ do
+                    --putStrLn $ "loading "++path
+                    tex <- loadImage (fromString (resPath </> path)) background
+                    let draw' ((x,y),(w,h)) = drawImage tex x y w h background
+                        cleanup' = destroyImage tex
+                    return (draw', cleanup')
+            drawIt = do
+                cache <- asks (inCache . ssInternals)
+                liftIO $ do
+                    mDraw <- readCache cache key
+                    case mDraw of
+                        Just draw -> draw rect
+                        Nothing   -> return ()
+        in  Sprite key rect cacheIt drawIt
 
 -- | Get system time in seconds since the start of the Unix epoch
 -- (1 Jan 1970).
@@ -246,30 +268,9 @@ instance Platform WebGL where
         freeCallback or
 
     nullDrawable rect = Sprite NullKey rect Nothing (return ())
-
-    image path = do
-        let key = ByteStringKey $ C.pack $ takeFileName path
-        return $ \rect ->
-            let cacheIt = Just $ do
-                    resPath <- asks (inResPath . ssInternals)
-                    cache <- asks (inCache . ssInternals)
-                    liftIO $ writeCache cache key $ do
-                        --putStrLn $ "loading "++path
-                        tex <- loadImage $ fromString $ resPath </> path
-                        let draw' ((x,y),(w,h)) = drawImage tex x y w h
-                            cleanup' = destroyImage tex
-                        return (draw', cleanup')
-                drawIt = do
-                    cache <- asks (inCache . ssInternals)
-                    liftIO $ do
-                        mDraw <- readCache cache key
-                        case mDraw of
-                            Just draw -> draw rect
-                            Nothing   -> return ()
-            in  Sprite key rect cacheIt drawIt
-
     sound file = return Sound
-
+    image file = webGLImage False file
+    backgroundImage file = ($ ((0,0),(0,0))) <$> webGLImage True file -- give it a dummy rectangle
     retainSound _ _ = return ()
 
     translateSprite v@(vx, vy) (Sprite key rect cache action) = error "WebGL.translateSprite undefined"

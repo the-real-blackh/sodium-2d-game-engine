@@ -199,6 +199,7 @@ instance Platform GLUT where
                             Just draw -> draw ((posX, posY), brightness)
                             Nothing   -> return ()
             in  Sprite key rect cacheIt drawIt
+    backgroundImage = error "GLUT.backgroundImage not implemented"
 
     sound file = Sound <$> newIORef (SoundPath file)
 
