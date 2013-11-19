@@ -1,12 +1,10 @@
-<html style="height:100%">
+<html>
 
 <head>
 <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
 
 <script type="text/javascript" src="gl-matrix-min.js"></script>
 <script type="text/javascript" src="webgl-utils.js"></script>
-
-<script language="javascript" src="all.js"></script>
 
 <script id="shader-fs" type="x-shader/x-fragment">
     precision mediump float;
@@ -51,6 +49,32 @@
         mat4.scale(pMatrix, pMatrix, [0.001 * height / width, 0.001, 1]);
         gl.uniformMatrix4fv(pMatrixUniform, false, pMatrix);
     }
+
+function getNumericStyleProperty(style, prop){
+    return parseInt(style.getPropertyValue(prop),10) ;
+}
+
+function element_position(e) {
+    var x = 0, y = 0;
+    var inner = true ;
+    do {
+        x += e.offsetLeft;
+        y += e.offsetTop;
+        var style = getComputedStyle(e,null) ;
+        var borderTop = getNumericStyleProperty(style,"border-top-width") ;
+        var borderLeft = getNumericStyleProperty(style,"border-left-width") ;
+        y += borderTop ;
+        x += borderLeft ;
+        if (inner){
+          var paddingTop = getNumericStyleProperty(style,"padding-top") ;
+          var paddingLeft = getNumericStyleProperty(style,"padding-left") ;
+          y += paddingTop ;
+          x += paddingLeft ;
+        }
+        inner = false ;
+    } while (e = e.offsetParent);
+    return { x: x, y: y };
+}
 
     function initGL(canvas, handleMouseDown, handleMouseUp, handleMouseMove) {
         try {
@@ -110,15 +134,20 @@
         squareBuf.itemSize = 3;
         squareBuf.numItems = 4;
 
-        canvas.onmousedown = function(event) { handleMouseDown(event.clientX, event.clientY); }
-        document.onmouseup = function(event) { handleMouseUp(event.clientX, event.clientY); }
-        document.onmousemove = function(event) { handleMouseMove(event.clientX, event.clientY); }
+        canvas.onmousedown = function(event) {
+            var offsetpos = element_position(canvas);
+            handleMouseDown(event.pageX-offsetpos.x, event.pageY-offsetpos.y); }
+        document.onmouseup = function(event) {
+            var offsetpos = element_position(canvas);
+            handleMouseUp(event.pageX-offsetpos.x, event.pageY-offsetpos.y); }
+        document.onmousemove = function(event) {
+            var offsetpos = element_position(canvas);
+            handleMouseMove(event.pageX-offsetpos.x, event.pageY-offsetpos.y); }
         
         prepareImage();
 
         return gl;
     }
-
     var gl;
     var pos;
     var pMatrixUniform;
@@ -223,11 +252,9 @@
 <meta name="viewport" content="width=device-width">
 </head>
 
-<body style="margin:0px;width:100%;height:100%">
-<body>
-<div style="display:table;width:100%;height:100%">
-<div style="display:table-row"><canvas id="mycanvas" style="border:none;width:100%;height:100%"></canvas></div>
-<div style="display:table-row;height:60px"><script type="text/javascript"><!--
+<body style="margin:0px;padding:0px;width:100%;height:100%">
+<div style="height:100%">
+<div style="height:60px"><script type="text/javascript"><!--
 google_ad_client = "ca-pub-6835969820123285";
 /* Ad1 */
 google_ad_slot = "9863211248";
@@ -238,7 +265,18 @@ google_ad_height = 60;
 <script type="text/javascript" src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
 </script>
 </div>
+<canvas id="mycanvas" style="border:none;width:100%"></canvas>
 </div>
 </body>
+
+<script language="javascript">
+var resizeCanvas = function() {
+    document.getElementById("mycanvas").style.height = (getWindowHeight() - 60) + "px";
+};
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+</script>
+
+<script language="javascript" src="all.js"></script>
 
 </html>
