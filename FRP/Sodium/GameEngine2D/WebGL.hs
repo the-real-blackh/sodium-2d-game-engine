@@ -54,8 +54,8 @@ foreign import javascript unsafe "startRendering()"
 foreign import javascript unsafe "endRendering()"
     endRendering :: IO ()
 
-foreign import javascript unsafe "isOutstanding()"
-    outstanding :: IO Bool
+foreign import javascript unsafe "toRedraw()"
+    toRedraw :: IO Bool
 
 foreign import javascript unsafe "requestAnimFrame2($1)"
     requestAnimFrame :: JSFun (IO ()) -> IO ()
@@ -216,8 +216,8 @@ instance Platform WebGL where
                 round . snd <$> sample viewport
             sprite <- readIORef spriteRef
             updated <- readIORef updatedRef
-            o <- outstanding
-            let toDraw = updated || o
+            jtor <- toRedraw
+            let toDraw = updated || jtor
 
             when toDraw $ do
                 preRunSprite internals iHeight sprite

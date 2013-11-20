@@ -18,6 +18,7 @@ var outstanding = false;
 var realFrame = null;
 var loadingT0 = new Date().getTime();
 var outstandingImages = 0;
+var redraw = false;
 
 function resizeViewport(width, height)
 {
@@ -114,6 +115,7 @@ function handleLoadedTexture(gl,tex) {
     outstandingImages--;
     if (outstandingImages == 0)
         outstanding = false;
+    redraw = true;
 }
 
 function prepareImage()
@@ -146,7 +148,7 @@ function startRendering()
 function endRendering()
 {
     if (loading || outstanding) {
-        var dt = new Date().getTime() - loadingT0
+        var dt = new Date().getTime() - loadingT0;
         if (dt >= 500)
             drawImage(loadingTex, 0, 0, 100, 100, false, dt/400);
     }
@@ -232,7 +234,17 @@ function getWindowHeight()
   }
 }
 
-function isOutstanding() { return outstanding; }
+function toRedraw() {
+    if (redraw) {
+        redraw = false;
+        return true;
+    }
+    if (outstanding) {
+        var dt = new Date().getTime() - loadingT0;
+        return dt >= 500;
+    }
+    return false;
+}
 
 try {
     gl = canvas.getContext("webgl");
