@@ -42,50 +42,29 @@ instance Monoid (Sprite WebGL) where
 data GL_
 type GL = JSRef GL_
 
-foreign import javascript unsafe "initGL($1,$2,$3,$4)"
-    initGL :: Element
-           -> JSFun (JSRef Float -> JSRef Float -> IO ())
+foreign import javascript unsafe "initGL($1,$2,$3)"
+    initGL :: JSFun (JSRef Float -> JSRef Float -> IO ())
            -> JSFun (JSRef Float -> JSRef Float -> IO ())
            -> JSFun (JSRef Float -> JSRef Float -> IO ())
            -> IO GL
 
-data Element_
-type Element = JSRef Element_
-
-foreign import javascript unsafe "document.getElementById($1)"
-    getElementById :: JSString -> IO Element
-
 foreign import javascript unsafe "startRendering()"
     startRendering :: IO ()
 
-foreign import javascript unsafe "$1.clearColor($2, $3, $4, $5);"
-    clearColor :: GL -> Float -> Float -> Float -> Float -> IO ()
-
-foreign import javascript unsafe "$1.clear($1.COLOR_BUFFER_BIT | $1.DEPTH_BUFFER_BIT);"
-    clear :: GL -> IO ()
-
-foreign import javascript unsafe "requestAnimFrame($1)"
+foreign import javascript unsafe "requestAnimFrame2($1)"
     requestAnimFrame :: JSFun (IO ()) -> IO ()
 
 foreign import javascript unsafe "window.addEventListener('resize',$1);"
     onWindowResize :: JSFun (IO ()) -> IO ()
 
-{-
-foreign import javascript unsafe "getWindowWidth()"
-    windowWidth :: IO Float
+foreign import javascript unsafe "canvas.offsetWidth"
+    canvasWidth :: IO Float
 
-foreign import javascript unsafe "getWindowHeight()"
-    windowHeight :: IO Float
-    -}
+foreign import javascript unsafe "canvas.offsetHeight"
+    canvasHeight :: IO Float
 
-foreign import javascript unsafe "$1.offsetWidth"
-    canvasWidth :: Element -> IO Float
-
-foreign import javascript unsafe "$1.offsetHeight"
-    canvasHeight :: Element -> IO Float
-
-foreign import javascript unsafe "resizeViewport($1,$2,$3)"
-    resizeViewport :: Element -> Float -> Float -> IO ()
+foreign import javascript unsafe "resizeViewport($1,$2)"
+    resizeViewport :: Float -> Float -> IO ()
 
 data Texture_
 type Texture = JSRef Texture_
@@ -94,7 +73,7 @@ foreign import javascript unsafe "loadImage"
     loadImage :: JSString -> Bool -> IO Texture
 
 foreign import javascript unsafe "drawImage"
-    drawImage :: Texture -> Float -> Float -> Float -> Float -> Bool -> IO ()
+    drawImage :: Texture -> Float -> Float -> Float -> Float -> Bool -> Float -> IO ()
 
 foreign import javascript unsafe "destroyImage"
     destroyImage :: Texture -> IO ()
@@ -125,7 +104,7 @@ webGLImage background path = do
                 liftIO $ writeCache cache key $ do
                     --putStrLn $ "loading "++path
                     tex <- loadImage (fromString (resPath </> path)) background
-                    let draw' ((x,y),(w,h)) = drawImage tex x y w h background
+                    let draw' ((x,y),(w,h)) = drawImage tex x y w h background 0
                         cleanup' = destroyImage tex
                     return (draw', cleanup')
             drawIt = do
@@ -161,9 +140,8 @@ instance Platform WebGL where
     type Touch WebGL = ()
 
     engine (WebGLArgs resPath) game = do
-        canvas <- getElementById "mycanvas"
-        width0 <- canvasWidth canvas
-        height0 <- canvasHeight canvas
+        width0 <- canvasWidth
+        height0 <- canvasHeight
         (viewport, sendViewport) <- sync $ newBehavior (width0, height0)
         let aspect = uncurry (/) <$> viewport
 
@@ -201,14 +179,14 @@ instance Platform WebGL where
             sync $ sendMouse $ MouseMove () pt
 
         or <- syncCallback True False $ do
-            w <- canvasWidth canvas
-            h <- canvasHeight canvas
-            resizeViewport canvas w h
+            w <- canvasWidth
+            h <- canvasHeight
+            resizeViewport w h
             sync $ sendViewport (w,h)
         onWindowResize or
 
-        gl <- initGL canvas md mu mm
-        resizeViewport canvas width0 height0
+        gl <- initGL md mu mm
+        resizeViewport width0 height0
 
         t0 <- getCurrentTime
         tLastEndRef <- newIORef =<< getTime t0
@@ -248,8 +226,6 @@ instance Platform WebGL where
 
             case mSprite of
                 Just sprite -> do startRendering
-                                  clearColor gl 0 0 0 1
-                                  clear gl
                                   runSprite internals iHeight sprite True
 
                                   writeIORef spriteRef Nothing
