@@ -14,6 +14,7 @@ var texCoords;
 var vpWidth;
 var vpHeight;
 var loading = true;
+var outstanding = false;
 var realFrame = null;
 var loadingT0 = new Date().getTime();
 var outstandingImages = 0;
@@ -69,8 +70,10 @@ function initGL(handleMouseDown, handleMouseUp, handleMouseMove) {
 
 function loadImage(fn, bg)
 {
-    if (outstandingImages == 0)
+    if (!outstanding) {
         loadingT0 = new Date().getTime();
+        outstanding = true;
+    }
     outstandingImages++;
     var tex = gl.createTexture();
     tex.loaded = false;
@@ -89,12 +92,12 @@ function loadImage(fn, bg)
                 tex.image = new Image();
                 // here is the most important part because if you dont replace you will get a DOM 18 exception.
                 tex.image.src = newCanvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-                tex.image.onload = function () { outstandingImages--; handleLoadedTexture(gl,tex); }
+                tex.image.onload = function () { handleLoadedTexture(gl,tex); }
             }
         };
     }
     else {
-        tex.image.onload = function() { outstandingImages--; if (!tex.deleted) handleLoadedTexture(gl,tex) };
+        tex.image.onload = function() { if (!tex.deleted) handleLoadedTexture(gl,tex) };
     }
     tex.image.src = fn;
     return tex;
@@ -108,6 +111,9 @@ function handleLoadedTexture(gl,tex) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.bindTexture(gl.TEXTURE_2D, null);
     tex.loaded = true;
+    outstandingImages--;
+    if (outstandingImages == 0)
+        outstanding = false;
 }
 
 function prepareImage()
@@ -139,7 +145,7 @@ function startRendering()
 
 function endRendering()
 {
-    if (loading || outstandingImages > 0) {
+    if (loading || outstanding) {
         var dt = new Date().getTime() - loadingT0
         if (dt >= 500)
             drawImage(loadingTex, 0, 0, 100, 100, false, dt/400);
@@ -151,6 +157,7 @@ function requestAnimFrame2(f)
     if (loading) {
         realFrame = f;
         loading = false;
+        outstanding = true;
     }
     else
         requestAnimFrame(f);
@@ -224,6 +231,8 @@ function getWindowHeight()
     }
   }
 }
+
+function isOutstanding() { return outstanding; }
 
 try {
     gl = canvas.getContext("webgl");

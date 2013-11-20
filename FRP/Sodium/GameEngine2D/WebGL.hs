@@ -54,6 +54,9 @@ foreign import javascript unsafe "startRendering()"
 foreign import javascript unsafe "endRendering()"
     endRendering :: IO ()
 
+foreign import javascript unsafe "isOutstanding()"
+    outstanding :: IO Bool
+
 foreign import javascript unsafe "requestAnimFrame2($1)"
     requestAnimFrame :: JSFun (IO ()) -> IO ()
 
@@ -152,8 +155,11 @@ instance Platform WebGL where
         (bSprite, bMusic, eEffects) <- sync $ do
             eCleanMouse <- cleanMouse eMouse
             game aspect eCleanMouse time rng
-        spriteRef <- newIORef =<< (Just <$> sync (sample bSprite))
-        kill <- sync $ listen (updates bSprite) (writeIORef spriteRef . Just)
+        spriteRef <- newIORef =<< sync (sample bSprite)
+        updatedRef <- newIORef True
+        kill <- sync $ listen (updates bSprite) $ \sprite -> do
+            writeIORef spriteRef sprite
+            writeIORef updatedRef True
 
         let scaleClick (xx, yy) = do
                 (width, height) <- sync $ sample viewport
@@ -208,10 +214,14 @@ instance Platform WebGL where
                 sendTime (t - lost)
                 sendRealTime t
                 round . snd <$> sample viewport
-            mSprite <- readIORef spriteRef
-            case mSprite of
-                Just sprite -> preRunSprite internals iHeight sprite
-                Nothing     -> return ()
+            sprite <- readIORef spriteRef
+            updated <- readIORef updatedRef
+            o <- outstanding
+            let toDraw = updated || o
+
+            when toDraw $ do
+                preRunSprite internals iHeight sprite
+                writeIORef updatedRef False
             tEnd <- getTime t0
             let lost = tEnd - t
             when (lost >= 0.1) $ do
@@ -224,12 +234,10 @@ instance Platform WebGL where
                   else
                     modifyIORef timeLostRef (+lost)
 
-            case mSprite of
-                Just sprite -> do startRendering
-                                  runSprite internals iHeight sprite True
-                                  endRendering
-                                  writeIORef spriteRef Nothing
-                Nothing     -> return ()
+            when toDraw $ do
+                startRendering
+                runSprite internals iHeight sprite True
+                endRendering
             tFinal <- getTime t0
             writeIORef tLastEndRef tFinal
             {-
