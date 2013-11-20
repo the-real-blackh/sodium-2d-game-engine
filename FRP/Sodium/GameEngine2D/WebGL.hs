@@ -51,6 +51,9 @@ foreign import javascript unsafe "initGL($1,$2,$3)"
 foreign import javascript unsafe "startRendering()"
     startRendering :: IO ()
 
+foreign import javascript unsafe "endRendering()"
+    endRendering :: IO ()
+
 foreign import javascript unsafe "requestAnimFrame2($1)"
     requestAnimFrame :: JSFun (IO ()) -> IO ()
 
@@ -224,7 +227,7 @@ instance Platform WebGL where
             case mSprite of
                 Just sprite -> do startRendering
                                   runSprite internals iHeight sprite True
-
+                                  endRendering
                                   writeIORef spriteRef Nothing
                 Nothing     -> return ()
             tFinal <- getTime t0

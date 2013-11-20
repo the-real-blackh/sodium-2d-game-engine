@@ -16,7 +16,7 @@ var vpHeight;
 var loading = true;
 var realFrame = null;
 var loadingT0 = new Date().getTime();
-var loadedImages = 0;
+var outstandingImages = 0;
 
 function resizeViewport(width, height)
 {
@@ -69,6 +69,9 @@ function initGL(handleMouseDown, handleMouseUp, handleMouseMove) {
 
 function loadImage(fn, bg)
 {
+    if (outstandingImages == 0)
+        loadingT0 = new Date().getTime();
+    outstandingImages++;
     var tex = gl.createTexture();
     tex.loaded = false;
     tex.deleted = false;
@@ -86,12 +89,12 @@ function loadImage(fn, bg)
                 tex.image = new Image();
                 // here is the most important part because if you dont replace you will get a DOM 18 exception.
                 tex.image.src = newCanvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-                tex.image.onload = function () { loadedImages++; handleLoadedTexture(gl,tex); }
+                tex.image.onload = function () { outstandingImages--; handleLoadedTexture(gl,tex); }
             }
         };
     }
     else {
-        tex.image.onload = function() { loadedImages++; if (!tex.deleted) handleLoadedTexture(gl,tex) };
+        tex.image.onload = function() { outstandingImages--; if (!tex.deleted) handleLoadedTexture(gl,tex) };
     }
     tex.image.src = fn;
     return tex;
@@ -132,10 +135,14 @@ function startRendering()
     gl.enable(gl.BLEND);
 
     prepareImage();
+}
 
-    if (loadedImages < 2) {
-        var rot = (new Date().getTime() - loadingT0) / 400
-        drawImage(loadingTex, 0, 0, 100, 100, false, rot);
+function endRendering()
+{
+    if (loading || outstandingImages > 0) {
+        var dt = new Date().getTime() - loadingT0
+        if (dt >= 0.5)
+            drawImage(loadingTex, 0, 0, 100, 100, false, dt/400);
     }
 }
 
@@ -276,6 +283,7 @@ var loadingTex = loadImage("loading.png", false);
 function drawWhileLoading() {
     if (!loading) { realFrame(); realFrame = null; } else {
         startRendering();
+        endRendering();
         requestAnimFrame(drawWhileLoading);
     }
 };
