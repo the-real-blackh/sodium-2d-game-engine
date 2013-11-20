@@ -141,7 +141,7 @@ function endRendering()
 {
     if (loading || outstandingImages > 0) {
         var dt = new Date().getTime() - loadingT0
-        if (dt >= 0.5)
+        if (dt >= 500)
             drawImage(loadingTex, 0, 0, 100, 100, false, dt/400);
     }
 }
