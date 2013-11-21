@@ -154,7 +154,7 @@ function startRendering()
 function endRendering()
 {
     if (loading || outstanding) {
-        var dt = Date.now - loadingT0;
+        var dt = new Date().getTime() - loadingT0;
         if (dt >= 500)
             drawImage(loadingTex, 0, 0, 100, 100, false, dt/400);
     }
@@ -246,7 +246,7 @@ function toRedraw() {
         return true;
     }
     if (outstanding) {
-        var dt = Date.now - loadingT0;
+        var dt = new Date().getTime() - loadingT0;
         return dt >= 500;
     }
     return false;
