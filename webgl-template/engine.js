@@ -257,7 +257,12 @@ if (gl == null) {
     catch (x) { gl = null; }
 }
 if (!gl) {
-    alert("Could not initialise WebGL, sorry :-(");
+    var elt = document.createElement("div");
+    elt.setAttribute("style","display:table-cell;vertical-align:middle;padding:10%;width:"+canvas.offsetWidth+"px;height:"+canvas.offsetHeight+"px");
+    elt.innerHTML = "You can't view this content, because your browser doesn't have WebGL capability. See <a href=\"http://get.webgl.org/\">Get WebGL</a> for more information.</div>";
+    canvas.parentNode.insertBefore(elt,canvas);
+    canvas.parentNode.removeChild(canvas);
+    elt.id = "mycanvas"
 }
 
 vShader = createShaderFromScriptElement(gl, "shader-vs");
