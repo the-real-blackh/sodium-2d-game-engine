@@ -16,7 +16,7 @@ var vpHeight;
 var loading = true;
 var outstanding = false;
 var realFrame = null;
-var loadingT0 = new Date().getTime();
+var loadingT0 = Date.now();
 var outstandingImages = 0;
 var redraw = false;
 
@@ -72,7 +72,7 @@ function initGL(handleMouseDown, handleMouseUp, handleMouseMove) {
 function loadImage(fn, bg)
 {
     if (!outstanding) {
-        loadingT0 = new Date().getTime();
+        loadingT0 = Date.now();
         outstanding = true;
     }
     outstandingImages++;
@@ -154,7 +154,7 @@ function startRendering()
 function endRendering()
 {
     if (loading || outstanding) {
-        var dt = new Date().getTime() - loadingT0;
+        var dt = Date.now - loadingT0;
         if (dt >= 500)
             drawImage(loadingTex, 0, 0, 100, 100, false, dt/400);
     }
@@ -246,7 +246,7 @@ function toRedraw() {
         return true;
     }
     if (outstanding) {
-        var dt = new Date().getTime() - loadingT0;
+        var dt = Date.now - loadingT0;
         return dt >= 500;
     }
     return false;
