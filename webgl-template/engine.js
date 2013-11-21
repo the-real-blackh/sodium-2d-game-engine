@@ -100,8 +100,16 @@ function loadImage(fn, bg)
     else {
         tex.image.onload = function() { if (!tex.deleted) handleLoadedTexture(gl,tex) };
     }
+    tex.image.onerror = decOutstanding;
     tex.image.src = fn;
     return tex;
+}
+
+function decOutstanding()
+{
+    outstandingImages--;
+    if (outstandingImages == 0)
+        outstanding = false;
 }
 
 function handleLoadedTexture(gl,tex) {
@@ -112,9 +120,7 @@ function handleLoadedTexture(gl,tex) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.bindTexture(gl.TEXTURE_2D, null);
     tex.loaded = true;
-    outstandingImages--;
-    if (outstandingImages == 0)
-        outstanding = false;
+    decOutstanding();
     redraw = true;
 }
 
