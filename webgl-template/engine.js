@@ -16,7 +16,7 @@ var vpHeight;
 var loading = true;
 var outstanding = false;
 var realFrame = null;
-var loadingT0 = Date.now();
+var loadingT0 = new Date().getTime();
 var outstandingImages = 0;
 var redraw = false;
 
@@ -72,7 +72,7 @@ function initGL(handleMouseDown, handleMouseUp, handleMouseMove) {
 function loadImage(fn, bg)
 {
     if (!outstanding) {
-        loadingT0 = Date.now();
+        loadingT0 = new Date().getTime();
         outstanding = true;
     }
     outstandingImages++;
