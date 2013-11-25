@@ -57,6 +57,7 @@ function element_position(e) {
 
 function initGL(handleMouseDown, handleMouseUp, handleMouseMove) {
     canvas.onmousedown = function(event) {
+        event.preventDefault();
         var offsetpos = element_position(canvas);
         handleMouseDown(event.pageX-offsetpos.x, event.pageY-offsetpos.y); }
     document.onmouseup = function(event) {
