@@ -168,21 +168,31 @@ instance Platform WebGL where
                     y = (-2000) * (yy / height - 0.5)
                 return (x, y)
 
+        blockedRef <- newIORef False
+        queuedRef <- newIORef Nothing
         md <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
+            writeIORef queuedRef Nothing
             sync $ sendMouse $ MouseDown () pt
         mu <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
+            writeIORef queuedRef Nothing
             sync $ sendMouse $ MouseUp () pt
         mm <- syncCallback2 True False $ \jx jy -> do
             Just xx <- fromJSRef jx :: IO (Maybe Float)
             Just yy <- fromJSRef jy :: IO (Maybe Float)
             pt <- scaleClick (xx, yy)
-            sync $ sendMouse $ MouseMove () pt
+            let mm = MouseMove () pt
+            blocked <- readIORef blockedRef
+            if blocked then
+                writeIORef queuedRef $ Just mm
+              else do
+                writeIORef blockedRef True
+                sync $ sendMouse $ MouseMove () pt
 
         or <- syncCallback True False $ do
             w <- canvasWidth
@@ -245,16 +255,19 @@ instance Platform WebGL where
                        showFFloat (Just 3) (tEnd - tStart) "" ++ " " ++
                        showFFloat (Just 3) (tFinal - tEnd) ""
             -}
+            writeIORef blockedRef False
+            mQueued <- readIORef queuedRef
+            case mQueued of
+                Just mm -> do
+                    sync $ sendMouse mm
+                    writeIORef queuedRef Nothing
+                Nothing -> return ()
             return ()
 
         -- Keep callbacks alive
         forM_ [(0::Int)..] $ \_ -> threadDelay 60000000
         putStrLn "kill everything!"
         kill
-        freeCallback md
-        freeCallback mu
-        freeCallback mm
-        freeCallback or
 
     nullDrawable rect = Sprite NullKey rect Nothing (return ())
     sound file = return Sound
