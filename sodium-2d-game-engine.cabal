@@ -43,17 +43,15 @@ library
                     random >= 1.0.1.1,
                     mtl >= 2.1.2,
                     sodium >= 0.9.0.0,
-                    text >= 0.11.3.1,
-                    directory >= 1.2.0.0,
-                    stm >= 2.4.2
+                    text >= 0.11.3.1
   if os(ios)
-      build-depends:    OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
+      build-depends:    stm >= 2.4.2, OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
                         FTGLES >= 1.333, libvorbis
   else
       if flag(ghcjs)
           build-depends:    ghcjs-base
       else
-          build-depends:    OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
+          build-depends:    stm >= 2.4.2, OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
                             GLUT >= 2.5.0.0, bitmap >= 0.0.2, stb-image >= 0.2.1, FTGL >= 1.333,
                             libvorbis
   ghc-options:

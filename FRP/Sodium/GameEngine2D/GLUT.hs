@@ -140,6 +140,62 @@ drawAt key action rect@((posX, posY),(sizeX, sizeY)) = Sprite key rect Nothing $
         GL.scale (realToFrac sizeX) (realToFrac sizeY) (1 :: GLfloat)
         action brightness
 
+glutImage :: Bool -> FilePath -> IO (Drawable GLUT)
+glutImage background path = do
+    let key = ByteStringKey $ C.pack $ takeFileName path
+    sizeRef <- newIORef Nothing
+    return $ \rect@((posX, posY),(sizeX, sizeY)) ->
+        let cacheIt = Just $ do
+                resPath <- asks (inResPath . ssInternals)
+                cache <- asks (inCache . ssInternals)
+                liftIO $ writeCache cache key $ do
+                    --putStrLn $ "loading "++path
+                    when simulateIOSSpeed $ liftIO $ threadDelay 600
+                    ti <- loadTexture (resPath </> path) False
+                    when background $ writeIORef sizeRef (Just (textureImageSize ti))
+                    to <- createTexture ti
+                    let draw' (_, brightness) = do
+                            color $ Color4 1 1 1 brightness
+                            textureBinding Texture2D $= Just to
+                            texture Texture2D $= Enabled
+                            textureFilter Texture2D $= ((Linear', Nothing), Linear')
+                            drawBB
+                        cleanup' = do
+                            writeIORef sizeRef Nothing
+                            --putStrLn $ "unloading "++path
+                            deleteObjectNames [to]
+                    return (draw', cleanup')
+            drawIt = do
+                cache <- asks (inCache . ssInternals)
+                brightness <- asks ssBrightness
+                liftIO $ preservingMatrix $ do
+                    GL.translate $ Vector3 (realToFrac posX) (realToFrac posY) (0 :: GLfloat)
+                    GL.scale (realToFrac sizeX) (realToFrac sizeY) (1 :: GLfloat)
+                    mDraw <- readCache cache key
+                    case mDraw of
+                        Just draw -> draw ((posX, posY), brightness)
+                        Nothing   -> return ()
+            drawBackground = do
+                cache <- asks (inCache . ssInternals)
+                brightness <- asks ssBrightness
+                bVPSize <- asks (inViewportSize . ssInternals)
+                liftIO $ do
+                    mSize <- readIORef sizeRef
+                    case mSize of
+                        Just (wid, hei) -> preservingMatrix $ do
+                            (vpWid, vpHei) <- sync $ sample bVPSize
+                            let vpAspect = fromIntegral vpWid / fromIntegral vpHei
+                                aspect = fromIntegral wid / fromIntegral hei
+                                screen = ((0,0),(1000 * vpAspect, 1000))
+                                (_, (bgWid, bgHei)) = coverAspect aspect screen
+                            GL.scale (realToFrac bgWid) (realToFrac bgHei) (1 :: GLfloat)
+                            mDraw <- readCache cache key
+                            case mDraw of
+                                Just draw -> draw ((posX, posY), brightness)
+                                Nothing   -> return ()
+                        Nothing -> return ()
+        in  Sprite key rect cacheIt (if background then drawBackground else drawIt)
+
 instance Platform GLUT where
     data Args GLUT = GLUTArgs {
             gaTitle   :: String,
@@ -167,39 +223,8 @@ instance Platform GLUT where
 
     nullDrawable = drawAt NullKey $ \_ -> return ()
 
-    image path = do
-        let key = ByteStringKey $ C.pack $ takeFileName path
-        return $ \rect@((posX, posY),(sizeX, sizeY)) ->
-            let cacheIt = Just $ do
-                    resPath <- asks (inResPath . ssInternals)
-                    cache <- asks (inCache . ssInternals)
-                    liftIO $ writeCache cache key $ do
-                        --putStrLn $ "loading "++path
-                        when simulateIOSSpeed $ liftIO $ threadDelay 600
-                        ti <- loadTexture (resPath </> path) False
-                        to <- createTexture ti
-                        let draw' (_, brightness) = do
-                                color $ Color4 1 1 1 brightness
-                                textureBinding Texture2D $= Just to
-                                texture Texture2D $= Enabled
-                                textureFilter Texture2D $= ((Linear', Nothing), Linear')
-                                drawBB
-                            cleanup' = do
-                                --putStrLn $ "unloading "++path
-                                deleteObjectNames [to]
-                        return (draw', cleanup')
-                drawIt = do
-                    cache <- asks (inCache . ssInternals)
-                    brightness <- asks ssBrightness
-                    liftIO $ preservingMatrix $ do
-                        GL.translate $ Vector3 (realToFrac posX) (realToFrac posY) (0 :: GLfloat)
-                        GL.scale (realToFrac sizeX) (realToFrac sizeY) (1 :: GLfloat)
-                        mDraw <- readCache cache key
-                        case mDraw of
-                            Just draw -> draw ((posX, posY), brightness)
-                            Nothing   -> return ()
-            in  Sprite key rect cacheIt drawIt
-    backgroundImage = error "GLUT.backgroundImage not implemented"
+    image path = glutImage False path
+    backgroundImage path = ($ ((0,0),(0,0))) <$> glutImage True path -- give it a dummy rectangle
 
     sound file = Sound <$> newIORef (SoundPath file)
 

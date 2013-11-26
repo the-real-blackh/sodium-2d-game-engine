@@ -3,6 +3,7 @@ module FRP.Sodium.GameEngine2D.Image (
         createTexture,
         TextureImage_(..),
         TextureImage,
+        textureImageSize,
         loadTexture
     ) where
 
@@ -32,6 +33,9 @@ data ImageException = ImageException String
 instance Exception ImageException
 instance Show ImageException where
     showsPrec _ (ImageException err) = ("ImageException: "++) . (err++)
+
+textureImageSize :: TextureImage_ a -> (Int, Int)
+textureImageSize (TextureImage wid hei _ _ _ _) = (wid, hei)
 
 loadTexture :: FilePath
             -> Bool               -- ^ True to invert it
