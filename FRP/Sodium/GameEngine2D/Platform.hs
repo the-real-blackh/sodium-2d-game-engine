@@ -72,6 +72,9 @@ appendKey NullKey k = k
 appendKey k NullKey = k
 appendKey k1 k2 = CompositeKey k1 k2
 
+engine :: Platform p =>
+          Args p -> (GameInput p -> Reactive (GameOutput p)) -> IO ()
+engine args game = engine' args $ \gi run -> sync (game gi) >>= run
 
 class (Monoid (Sprite p),
        Eq (Touch p),
@@ -82,18 +85,7 @@ class (Monoid (Sprite p),
     data Font p
     data Sound p
     type Touch p
-    engine :: Args p -> (GameInput p -> Reactive (GameOutput p)) -> IO ()
-    {-
-    engine :: Args p -> (
-               Behavior Float
-            -> Behavior MouseEvent
-            -> Behavior Double
-            -> StdGen
-            -> (
-                (Behavior 
-            -> IO ()
-        ) -> IO ()) -> IO ()
-        -}
+    engine' :: Args p -> (GameInput p -> (GameOutput p -> IO ()) -> IO ()) -> IO ()
     nullDrawable :: Drawable p
     image :: FilePath -> IO (Drawable p)
     backgroundImage :: FilePath -> IO (Sprite p)

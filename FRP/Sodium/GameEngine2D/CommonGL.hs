@@ -237,10 +237,20 @@ getTime t0 = do
     return $ realToFrac (t `diffUTCTime` t0)
 
 glEngine :: Platform p =>
-            ((Behavior (Int, Int) -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touch p -> TouchPhase -> Coord -> Coord -> IO ())) -> IO ())
-         -> (GameInput p -> Reactive (GameOutput p))
+            (
+                (
+                    Behavior (Int, Int)
+                 -> FilePath
+                 -> FilePath
+                 -> Internals p
+                 -> (IO () -> IO () -> (Touch p -> TouchPhase -> Coord -> Coord -> IO ()) -> IO ())
+                 -> IO ()
+                )
+             -> IO ()
+            )
+         -> (GameInput p -> (GameOutput p -> IO ()) -> IO ())
          -> IO ()
-glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir internals -> do
+glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir internals cont -> do
     let aspect = (\(width, height) -> fromIntegral width / fromIntegral height) <$> viewportSize
     putStrLn $ "resource dir: "++resourceDir
 
@@ -260,73 +270,73 @@ glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir i
     (time, sendTime) <- sync $ newBehavior 0
     (realTime, sendRealTime) <- sync $ newBehavior 0
     rng0 <- newStdGen
-    GameOutput { goSprite = bSprite, goMusic = bMusic, goEffects = eEffects } <- sync $ game $ GameInput {
-                        giAspect = aspect,
-                        giMouse  = eMouse,
-                        giTime   = time,
-                        giRNG0   = rng0
-                    }
-    spriteRef <- newIORef =<< sync (sample bSprite)
-    kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
-
-    let kill = kill1
-
-    -- Distribute the effects alternately between two threads so two effects
-    -- can play simultaneously.
-    (bEffects1, bEffects2, bMusic') <- sync $ do
-        (eEffects1, eEffects2) <- twoStreams eEffects
-        b1 <- hold [] $ (:[]) <$> eEffects1
-        b2 <- hold [] $ (:[]) <$> eEffects2
-        bMusic' <- removeDuplicateMusic bMusic
-        return (b1, b2, bMusic')
-    audioThread internals [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
-
-    t0 <- getCurrentTime
-    tLastEndRef <- newIORef =<< getTime t0
-    timeLostRef <- newIORef 0
-    tLastGC <- newIORef 0
-
-    let updateFrame = do
-            --t <- getTime
-            t <- readIORef tLastEndRef
-            lost <- readIORef timeLostRef
-            --putStrLn $ showFFloat (Just 3) (t - lost) ""
-            (width, height) <- sync $ do
-                sendTime (t - lost)
-                sendRealTime t
-                sample viewportSize
-            sprite <- readIORef spriteRef
-            preRunSprite internals height sprite
-            tEnd <- getTime t0
-            let lost = tEnd - t
-            when (lost >= 0.1) $ do
-                since <- (\last -> tEnd - last) <$> readIORef tLastGC
-                if lost >= 0.25 && since >= 3 then do
-                    --putStrLn "major GC"
-                    performGC
-                    tEnd' <- getTime t0
-                    writeIORef tLastGC tEnd'
-                    let lost' = tEnd' - t
-                    modifyIORef timeLostRef (+lost')
-                  else
-                    modifyIORef timeLostRef (+lost)
-                --putStrLn $ "PRE " ++ showFFloat (Just 3) lost ""
-    let drawFrame = do
-            tStart <- getTime t0
-            GL.clearColor $= GL.Color4 1 1 1 (1 :: GLfloat)
-            GL.clear [ColorBuffer]
-            loadIdentity
-            (width, height) <- sync $ sample viewportSize
-            GL.scale (0.001*fromIntegral height/fromIntegral width) 0.001 (0.001 :: GLfloat)
-            sprite <- readIORef spriteRef
-            runSprite internals height sprite True
-            tEnd <- getTime t0
-            writeIORef tLastEndRef tEnd
-            _ <- evaluate kill
-            return ()
-
-    updateFrame
-    return (updateFrame, drawFrame, touched)
+    game GameInput {
+            giAspect = aspect,
+            giMouse  = eMouse,
+            giTime   = time,
+            giRNG0   = rng0
+        } $ \GameOutput { goSprite = bSprite, goMusic = bMusic, goEffects = eEffects } -> do
+            spriteRef <- newIORef =<< sync (sample bSprite)
+            kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
+        
+            let kill = kill1
+        
+            -- Distribute the effects alternately between two threads so two effects
+            -- can play simultaneously.
+            (bEffects1, bEffects2, bMusic') <- sync $ do
+                (eEffects1, eEffects2) <- twoStreams eEffects
+                b1 <- hold [] $ (:[]) <$> eEffects1
+                b2 <- hold [] $ (:[]) <$> eEffects2
+                bMusic' <- removeDuplicateMusic bMusic
+                return (b1, b2, bMusic')
+            audioThread internals [(bMusic', 0.5), (bEffects1, 1), (bEffects2, 1)]
+        
+            t0 <- getCurrentTime
+            tLastEndRef <- newIORef =<< getTime t0
+            timeLostRef <- newIORef 0
+            tLastGC <- newIORef 0
+        
+            let updateFrame = do
+                    --t <- getTime
+                    t <- readIORef tLastEndRef
+                    lost <- readIORef timeLostRef
+                    --putStrLn $ showFFloat (Just 3) (t - lost) ""
+                    (width, height) <- sync $ do
+                        sendTime (t - lost)
+                        sendRealTime t
+                        sample viewportSize
+                    sprite <- readIORef spriteRef
+                    preRunSprite internals height sprite
+                    tEnd <- getTime t0
+                    let lost = tEnd - t
+                    when (lost >= 0.1) $ do
+                        since <- (\last -> tEnd - last) <$> readIORef tLastGC
+                        if lost >= 0.25 && since >= 3 then do
+                            --putStrLn "major GC"
+                            performGC
+                            tEnd' <- getTime t0
+                            writeIORef tLastGC tEnd'
+                            let lost' = tEnd' - t
+                            modifyIORef timeLostRef (+lost')
+                          else
+                            modifyIORef timeLostRef (+lost)
+                        --putStrLn $ "PRE " ++ showFFloat (Just 3) lost ""
+            let drawFrame = do
+                    tStart <- getTime t0
+                    GL.clearColor $= GL.Color4 1 1 1 (1 :: GLfloat)
+                    GL.clear [ColorBuffer]
+                    loadIdentity
+                    (width, height) <- sync $ sample viewportSize
+                    GL.scale (0.001*fromIntegral height/fromIntegral width) 0.001 (0.001 :: GLfloat)
+                    sprite <- readIORef spriteRef
+                    runSprite internals height sprite True
+                    tEnd <- getTime t0
+                    writeIORef tLastEndRef tEnd
+                    _ <- evaluate kill
+                    return ()
+        
+            updateFrame
+            cont updateFrame drawFrame touched
 
 -- | Split the event into two alternating streams so it is possible to have two
 -- effects playing at the same time.

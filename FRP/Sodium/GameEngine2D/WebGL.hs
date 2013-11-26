@@ -142,7 +142,7 @@ instance Platform WebGL where
     data Sound WebGL = Sound
     type Touch WebGL = ()
 
-    engine (WebGLArgs resPath) game = do
+    engine' (WebGLArgs resPath) game = do
         width0 <- canvasWidth
         height0 <- canvasHeight
         (viewport, sendViewport) <- sync $ newBehavior (width0, height0)
@@ -152,127 +152,126 @@ instance Platform WebGL where
         (realTime, sendRealTime) <- sync $ newBehavior 0
         rng0 <- newStdGen
         (eMouse, sendMouse) <- sync newEvent
-        GameOutput { goSprite = bSprite, goMusic = bMusic, goEffects = eEffects } <- sync $ do
-            eCleanMouse <- cleanMouse eMouse
-            game $ GameInput {
-                        giAspect = aspect,
-                        giMouse  = eCleanMouse,
-                        giTime   = time,
-                        giRNG0   = rng0
-                    }
-        spriteRef <- newIORef =<< sync (sample bSprite)
-        updatedRef <- newIORef True
-        kill <- sync $ listen (updates bSprite) $ \sprite -> do
-            writeIORef spriteRef sprite
-            writeIORef updatedRef True
-
-        let scaleClick (xx, yy) = do
-                (width, height) <- sync $ sample viewport
-                let xscale  = 2000 * width / height
-                    x = xscale * (xx / width - 0.5)
-                    y = (-2000) * (yy / height - 0.5)
-                return (x, y)
-
-        blockedRef <- newIORef False
-        queuedRef <- newIORef Nothing
-        md <- syncCallback2 True False $ \jx jy -> do
-            Just xx <- fromJSRef jx :: IO (Maybe Float)
-            Just yy <- fromJSRef jy :: IO (Maybe Float)
-            pt <- scaleClick (xx, yy)
-            writeIORef queuedRef Nothing
-            sync $ sendMouse $ MouseDown () pt
-        mu <- syncCallback2 True False $ \jx jy -> do
-            Just xx <- fromJSRef jx :: IO (Maybe Float)
-            Just yy <- fromJSRef jy :: IO (Maybe Float)
-            pt <- scaleClick (xx, yy)
-            writeIORef queuedRef Nothing
-            sync $ sendMouse $ MouseUp () pt
-        mm <- syncCallback2 True False $ \jx jy -> do
-            Just xx <- fromJSRef jx :: IO (Maybe Float)
-            Just yy <- fromJSRef jy :: IO (Maybe Float)
-            pt <- scaleClick (xx, yy)
-            let mm = MouseMove () pt
-            blocked <- readIORef blockedRef
-            if blocked then
-                writeIORef queuedRef $ Just mm
-              else do
-                writeIORef blockedRef True
-                sync $ sendMouse $ MouseMove () pt
-
-        or <- syncCallback True False $ do
-            w <- canvasWidth
-            h <- canvasHeight
-            resizeViewport w h
-            sync $ sendViewport (w,h)
-        onWindowResize or
-
-        gl <- initGL md mu mm
-        resizeViewport width0 height0
-
-        t0 <- getCurrentTime
-        tLastEndRef <- newIORef =<< getTime t0
-        timeLostRef <- newIORef 0
-        tLastGC <- newIORef 0
-
-        cache <- newCache
-        let internals = WebGLInternals {
-                    inResPath  = resPath,
-                    inCache    = cache
-                }
-
-        animate $ do
-
-            t <- readIORef tLastEndRef
-            tStart <- getTime t0
-            lost <- readIORef timeLostRef
-            iHeight <- sync $ do
-                sendTime (t - lost)
-                sendRealTime t
-                round . snd <$> sample viewport
-            sprite <- readIORef spriteRef
-            updated <- readIORef updatedRef
-            jtor <- toRedraw
-            let toDraw = updated || jtor
-
-            when toDraw $ do
-                preRunSprite internals iHeight sprite
-                writeIORef updatedRef False
-            tEnd <- getTime t0
-            let lost = tEnd - t
-            when (lost >= 0.1) $ do
-                since <- (\last -> tEnd - last) <$> readIORef tLastGC
-                if lost >= 0.25 && since >= 3 then do
-                    tEnd' <- getTime t0
-                    writeIORef tLastGC tEnd'
-                    let lost' = tEnd' - t
-                    modifyIORef timeLostRef (+lost')
-                  else
-                    modifyIORef timeLostRef (+lost)
-
-            when toDraw $ do
-                startRendering
-                runSprite internals iHeight sprite True
-                endRendering
-            tFinal <- getTime t0
-            writeIORef tLastEndRef tFinal
-            {-
-            putStrLn $ showFFloat (Just 3) (tStart -t) "" ++ " " ++
-                       showFFloat (Just 3) (tEnd - tStart) "" ++ " " ++
-                       showFFloat (Just 3) (tFinal - tEnd) ""
-            -}
-            writeIORef blockedRef False
-            mQueued <- readIORef queuedRef
-            case mQueued of
-                Just mm -> do
-                    sync $ sendMouse mm
+        eCleanMouse <- sync $ cleanMouse eMouse
+        game GameInput {
+                giAspect = aspect,
+                giMouse  = eCleanMouse,
+                giTime   = time,
+                giRNG0   = rng0
+            } $ \GameOutput { goSprite = bSprite, goMusic = bMusic, goEffects = eEffects } -> do
+                spriteRef <- newIORef =<< sync (sample bSprite)
+                updatedRef <- newIORef True
+                kill <- sync $ listen (updates bSprite) $ \sprite -> do
+                    writeIORef spriteRef sprite
+                    writeIORef updatedRef True
+        
+                let scaleClick (xx, yy) = do
+                        (width, height) <- sync $ sample viewport
+                        let xscale  = 2000 * width / height
+                            x = xscale * (xx / width - 0.5)
+                            y = (-2000) * (yy / height - 0.5)
+                        return (x, y)
+        
+                blockedRef <- newIORef False
+                queuedRef <- newIORef Nothing
+                md <- syncCallback2 True False $ \jx jy -> do
+                    Just xx <- fromJSRef jx :: IO (Maybe Float)
+                    Just yy <- fromJSRef jy :: IO (Maybe Float)
+                    pt <- scaleClick (xx, yy)
                     writeIORef queuedRef Nothing
-                Nothing -> return ()
-            return ()
-
-        -- Keep callbacks alive
-        forM_ [(0::Int)..] $ \_ -> threadDelay 60000000
-        putStrLn "kill everything!"
-        kill
+                    sync $ sendMouse $ MouseDown () pt
+                mu <- syncCallback2 True False $ \jx jy -> do
+                    Just xx <- fromJSRef jx :: IO (Maybe Float)
+                    Just yy <- fromJSRef jy :: IO (Maybe Float)
+                    pt <- scaleClick (xx, yy)
+                    writeIORef queuedRef Nothing
+                    sync $ sendMouse $ MouseUp () pt
+                mm <- syncCallback2 True False $ \jx jy -> do
+                    Just xx <- fromJSRef jx :: IO (Maybe Float)
+                    Just yy <- fromJSRef jy :: IO (Maybe Float)
+                    pt <- scaleClick (xx, yy)
+                    let mm = MouseMove () pt
+                    blocked <- readIORef blockedRef
+                    if blocked then
+                        writeIORef queuedRef $ Just mm
+                      else do
+                        writeIORef blockedRef True
+                        sync $ sendMouse $ MouseMove () pt
+        
+                or <- syncCallback True False $ do
+                    w <- canvasWidth
+                    h <- canvasHeight
+                    resizeViewport w h
+                    sync $ sendViewport (w,h)
+                onWindowResize or
+        
+                gl <- initGL md mu mm
+                resizeViewport width0 height0
+        
+                t0 <- getCurrentTime
+                tLastEndRef <- newIORef =<< getTime t0
+                timeLostRef <- newIORef 0
+                tLastGC <- newIORef 0
+        
+                cache <- newCache
+                let internals = WebGLInternals {
+                            inResPath  = resPath,
+                            inCache    = cache
+                        }
+        
+                animate $ do
+        
+                    t <- readIORef tLastEndRef
+                    tStart <- getTime t0
+                    lost <- readIORef timeLostRef
+                    iHeight <- sync $ do
+                        sendTime (t - lost)
+                        sendRealTime t
+                        round . snd <$> sample viewport
+                    sprite <- readIORef spriteRef
+                    updated <- readIORef updatedRef
+                    jtor <- toRedraw
+                    let toDraw = updated || jtor
+        
+                    when toDraw $ do
+                        preRunSprite internals iHeight sprite
+                        writeIORef updatedRef False
+                    tEnd <- getTime t0
+                    let lost = tEnd - t
+                    when (lost >= 0.1) $ do
+                        since <- (\last -> tEnd - last) <$> readIORef tLastGC
+                        if lost >= 0.25 && since >= 3 then do
+                            tEnd' <- getTime t0
+                            writeIORef tLastGC tEnd'
+                            let lost' = tEnd' - t
+                            modifyIORef timeLostRef (+lost')
+                          else
+                            modifyIORef timeLostRef (+lost)
+        
+                    when toDraw $ do
+                        startRendering
+                        runSprite internals iHeight sprite True
+                        endRendering
+                    tFinal <- getTime t0
+                    writeIORef tLastEndRef tFinal
+                    {-
+                    putStrLn $ showFFloat (Just 3) (tStart -t) "" ++ " " ++
+                               showFFloat (Just 3) (tEnd - tStart) "" ++ " " ++
+                               showFFloat (Just 3) (tFinal - tEnd) ""
+                    -}
+                    writeIORef blockedRef False
+                    mQueued <- readIORef queuedRef
+                    case mQueued of
+                        Just mm -> do
+                            sync $ sendMouse mm
+                            writeIORef queuedRef Nothing
+                        Nothing -> return ()
+                    return ()
+        
+                -- Keep callbacks alive
+                forM_ [(0::Int)..] $ \_ -> threadDelay 60000000
+                putStrLn "kill everything!"
+                kill
 
     nullDrawable rect = Sprite NullKey rect Nothing (return ())
     sound file = return Sound

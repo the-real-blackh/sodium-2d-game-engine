@@ -38,7 +38,14 @@ import System.Random (newStdGen)
 
 
 initGraphics :: Args GLUT
-             -> (Behavior (Int, Int) -> FilePath -> FilePath -> Internals GLUT -> IO (IO (), IO (), Touch GLUT -> TouchPhase -> Coord -> Coord -> IO ()))
+             -> (
+                    Behavior (Int, Int)
+                 -> FilePath
+                 -> FilePath
+                 -> Internals GLUT
+                 -> (IO () -> IO () -> (Touch GLUT -> TouchPhase -> Coord -> Coord -> IO ()) -> IO ())
+                 -> IO ()
+                )
              -> IO ()
 initGraphics (GLUTArgs title resPath) init = do
     _ <- GLUT.getArgsAndInitialize
@@ -55,34 +62,33 @@ initGraphics (GLUTArgs title resPath) init = do
                 inCache        = cache,
                 inViewportSize = viewportSize
             }
-    (updateFrame, drawFrame, touched) <- init viewportSize resourceDir resourceDir internals
-
-    GLUT.displayCallback $= display updateFrame drawFrame
-    GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
-
-    let motion (GLUT.Position x y) = do
-            (x', y') <- toScreen viewportSize x y
-            touched () TouchMoved x' y'
-    GLUT.motionCallback $= Just motion
-    GLUT.passiveMotionCallback $= Just motion
-    GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
-        case (key, keyState, pos) of
-            (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
+    init viewportSize resourceDir resourceDir internals $ \updateFrame drawFrame touched -> do
+        GLUT.displayCallback $= display updateFrame drawFrame
+        GLUT.addTimerCallback (1000 `div` frameRate) $ repaint
+    
+        let motion (GLUT.Position x y) = do
                 (x', y') <- toScreen viewportSize x y
-                touched () TouchBegan x' y'
-            (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
-                (x', y') <- toScreen viewportSize x y
-                touched () TouchEnded x' y'
-            (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
-                exitSuccess
-            _ -> return ()
-      )
-    GLUT.reshapeCallback $= Just (\sz@(Size w h) -> do
-        sync $ sendViewportSize (fromIntegral w, fromIntegral h)
-        viewport $= (Position 0 0, sz)
-      )
- 
-    GLUT.mainLoop
+                touched () TouchMoved x' y'
+        GLUT.motionCallback $= Just motion
+        GLUT.passiveMotionCallback $= Just motion
+        GLUT.keyboardMouseCallback $= Just (\key keyState mods pos -> do
+            case (key, keyState, pos) of
+                (GLUT.MouseButton GLUT.LeftButton, GLUT.Down, GLUT.Position x y) -> do
+                    (x', y') <- toScreen viewportSize x y
+                    touched () TouchBegan x' y'
+                (GLUT.MouseButton GLUT.LeftButton, GLUT.Up,   GLUT.Position x y) -> do
+                    (x', y') <- toScreen viewportSize x y
+                    touched () TouchEnded x' y'
+                (GLUT.MouseButton GLUT.MiddleButton, GLUT.Down, GLUT.Position x y) ->
+                    exitSuccess
+                _ -> return ()
+          )
+        GLUT.reshapeCallback $= Just (\sz@(Size w h) -> do
+            sync $ sendViewportSize (fromIntegral w, fromIntegral h)
+            viewport $= (Position 0 0, sz)
+          )
+     
+        GLUT.mainLoop
 
   where
     toScreen :: Behavior (Int, Int) -> GLint -> GLint -> IO (Coord, Coord)
@@ -219,7 +225,7 @@ instance Platform GLUT where
     newtype Sound GLUT = Sound (IORef SoundInfo)
     type Touch GLUT = ()
 
-    engine args game = glEngine (initGraphics args) game
+    engine' args game = glEngine (initGraphics args) game
 
     nullDrawable = drawAt NullKey $ \_ -> return ()
 
