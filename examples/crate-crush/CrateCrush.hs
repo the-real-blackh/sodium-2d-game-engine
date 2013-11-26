@@ -6,6 +6,7 @@ import FRP.Sodium.GameEngine2D.Platform
 import FRP.Sodium
 import Control.Applicative
 import Control.Monad (mplus)
+import Data.Default
 import Data.List (foldr1)
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -18,7 +19,7 @@ import System.FilePath
 import System.Random
 
 
-crateCrush :: Platform p => Args p -> IO (Behavior Coord -> Game p)
+crateCrush :: Platform p => Args p -> IO (GameInput p -> Reactive (GameOutput p))
 crateCrush args = do
     crate <- image "crate.png"
     grass <- image "grass.png"
@@ -39,16 +40,10 @@ game :: Platform p =>
      -> Drawable p           -- ^ Grass
      -> Sound p              -- ^ Create
      -> Sound p              -- ^ Smash
-     -> Behavior Coord       -- ^ Aspect ratio
-     -> Event (MouseEvent p) -- ^ Mouse events
-     -> Behavior Double     -- ^ Time
-     -> StdGen               -- ^ Random number generator
-     -> Reactive (
-            Behavior (Sprite p),         -- ^ Sprites to draw
-            Behavior (Text, [Sound p]),  -- ^ Music
-            Event (Sound p)              -- ^ Sound effects
-        )
-game drawCrate drawGrass playCreate playDestroy aspect eMouse time rng = do
+     -> GameInput p
+     -> Reactive (GameOutput p)
+game drawCrate drawGrass playCreate playDestroy
+        GameInput { giMouse = eMouse, giTime = time } = do
 
     rec
         -- Behavior (Map Int (Behavior Rect))
@@ -94,7 +89,7 @@ game drawCrate drawGrass playCreate playDestroy aspect eMouse time rng = do
         sprites =
             fmap (mconcat . (drawGrass grassRect:) . map drawCrate) rects
 
-    return (sprites, pure ("", []), eSound)
+    return $ def { goSprite = sprites, goEffects = eSound }
 
 crateSize :: Vector
 crateSize = (120,120)

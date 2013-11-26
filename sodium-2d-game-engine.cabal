@@ -17,6 +17,7 @@ flag ghcjs
 
 library
   exposed-modules:
+        FRP.Sodium.GameEngine2D.CleanMouse
         FRP.Sodium.GameEngine2D.Geometry
         FRP.Sodium.GameEngine2D.Orientation
         FRP.Sodium.GameEngine2D.Cache
@@ -36,14 +37,15 @@ library
                           FRP.Sodium.GameEngine2D.Image
 
   build-depends:    base >= 4.5 && < 4.8,
-                    filepath,
+                    filepath >= 1.3.0.0,
                     bytestring >= 0.10.0.0,
                     containers >= 0.5.0.0,
-                    time,
+                    time >= 1.4.0.0,
                     random >= 1.0.1.1,
                     mtl >= 2.1.2,
                     sodium >= 0.9.0.0,
-                    text >= 0.11.3.1
+                    text >= 0.11.3.1,
+                    data-default >= 0.5.3
   if os(ios)
       build-depends:    stm >= 2.4.2, OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
                         FTGLES >= 1.333, libvorbis

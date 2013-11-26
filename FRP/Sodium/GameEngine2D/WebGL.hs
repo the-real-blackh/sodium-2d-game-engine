@@ -150,11 +150,16 @@ instance Platform WebGL where
 
         (time, sendTime) <- sync $ newBehavior 0
         (realTime, sendRealTime) <- sync $ newBehavior 0
-        rng <- newStdGen
+        rng0 <- newStdGen
         (eMouse, sendMouse) <- sync newEvent
-        (bSprite, bMusic, eEffects) <- sync $ do
+        GameOutput { goSprite = bSprite, goMusic = bMusic, goEffects = eEffects } <- sync $ do
             eCleanMouse <- cleanMouse eMouse
-            game aspect eCleanMouse time rng
+            game $ GameInput {
+                        giAspect = aspect,
+                        giMouse  = eCleanMouse,
+                        giTime   = time,
+                        giRNG0   = rng0
+                    }
         spriteRef <- newIORef =<< sync (sample bSprite)
         updatedRef <- newIORef True
         kill <- sync $ listen (updates bSprite) $ \sprite -> do

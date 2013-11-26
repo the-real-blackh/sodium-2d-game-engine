@@ -5,10 +5,13 @@ module FRP.Sodium.GameEngine2D.Platform where
 
 import FRP.Sodium.GameEngine2D.Geometry
 
+import Control.Applicative
 import Data.ByteString.Char8 (ByteString)
+import Data.Default
 import Data.Monoid
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import qualified Data.Text as T
 import FRP.Sodium
 import System.FilePath
 import System.Random (StdGen)
@@ -35,14 +38,21 @@ gateMouse e b = filterJust $ snapshotWith fmouse e b
     fmouse (MouseDown _ _) False = Nothing
     fmouse m _                   = Just m
 
-type Game p = Event (MouseEvent p)
-           -> Behaviour Double
-           -> StdGen
-           -> Reactive (
-                  Behaviour (Sprite p),
-                  Behavior (Text, [Sound p]),
-                  Event (Sound p)
-              )
+data GameInput p = GameInput {
+        giAspect :: Behavior Coord,
+        giMouse  :: Event (MouseEvent p),
+        giTime   :: Behavior Double,
+        giRNG0   :: StdGen
+    }
+
+data GameOutput p = GameOutput {
+        goSprite  :: Behavior (Sprite p),
+        goMusic   :: Behavior (Text, [Sound p]),
+        goEffects :: Event (Sound p) 
+    }
+
+instance Platform p => Default (GameOutput p) where
+    def = GameOutput (pure mempty) (pure (T.empty, [])) never
 
 data TouchPhase = TouchBegan | TouchMoved | TouchEnded | TouchCancelled deriving (Eq, Ord, Show, Enum)
 
@@ -62,6 +72,7 @@ appendKey NullKey k = k
 appendKey k NullKey = k
 appendKey k1 k2 = CompositeKey k1 k2
 
+
 class (Monoid (Sprite p),
        Eq (Touch p),
        Ord (Touch p)) => Platform p where
@@ -71,7 +82,18 @@ class (Monoid (Sprite p),
     data Font p
     data Sound p
     type Touch p
-    engine :: Args p -> (Behavior Float -> Game p) -> IO ()
+    engine :: Args p -> (GameInput p -> Reactive (GameOutput p)) -> IO ()
+    {-
+    engine :: Args p -> (
+               Behavior Float
+            -> Behavior MouseEvent
+            -> Behavior Double
+            -> StdGen
+            -> (
+                (Behavior 
+            -> IO ()
+        ) -> IO ()) -> IO ()
+        -}
     nullDrawable :: Drawable p
     image :: FilePath -> IO (Drawable p)
     backgroundImage :: FilePath -> IO (Sprite p)

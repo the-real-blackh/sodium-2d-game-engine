@@ -9,6 +9,7 @@ import FRP.Sodium.GameEngine2D.Platform
 import FRP.Sodium
 import Control.Applicative
 import Control.Monad
+import Data.Default
 import Data.Traversable (sequenceA)
 import Data.List
 import Data.Map (Map)
@@ -25,7 +26,7 @@ import Data.Text (Text)
 import Debug.Trace
 
 
-freecell :: Platform p => [Background FilePath] -> IO (Behavior Coord -> Game p)
+freecell :: Platform p => [Background FilePath] -> IO (GameInput p -> Reactive (GameOutput p))
 freecell bgFiles = game <$> loadResources bgFiles
 
 data ButtonImage p = ButtonImage {
@@ -533,16 +534,9 @@ backgroundChanger res time aspect = do
 
 game :: Platform p =>
         Resources p
-     -> Behavior Coord  -- ^ Aspect ratio
-     -> Event (MouseEvent p)
-     -> Behavior Double
-     -> StdGen
-     -> Reactive (
-            Behaviour (Sprite p),
-            Behavior (Text, [Sound p]),
-            Event (Sound p)
-        )
-game res aspect eMouse0 time rng0 = do
+     -> GameInput p
+     -> Reactive (GameOutput p)
+game res GameInput { giAspect = aspect, giMouse = eMouse0, giTime = time, giRNG0 = rng0 } = do
 
     bgSpr <- backgroundChanger res time aspect
 
@@ -624,16 +618,14 @@ game res aspect eMouse0 time rng0 = do
         let emptySpaces = foldr1 (\x y -> (+) <$> x <*> y) ceEmptySpaces
             eDrag = foldr1 merge (stDrags ++ ceDrags ++ [grDrag])
         (drSprites, eDrop) <- dragger board draw eMouse eDrag
-    return (
-        mconcat <$> sequenceA (
-            [bgSpr, buttonsSpr] ++
-            stSprites ++
-            ceSprites ++
-            [grSprites, drSprites, helpPageSpr]
-        ),
-        pure ("", []),
-        never
-      )
+    return $ def {
+            goSprite = mconcat <$> sequenceA (
+                [bgSpr, buttonsSpr] ++
+                stSprites ++
+                ceSprites ++
+                [grSprites, drSprites, helpPageSpr]
+            )
+        }
 
 shuffle :: StdGen -> [Card] -> ([Card], StdGen)
 shuffle rng cards =

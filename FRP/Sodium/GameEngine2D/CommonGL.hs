@@ -238,7 +238,7 @@ getTime t0 = do
 
 glEngine :: Platform p =>
             ((Behavior (Int, Int) -> FilePath -> FilePath -> Internals p -> IO (IO (), IO (), Touch p -> TouchPhase -> Coord -> Coord -> IO ())) -> IO ())
-         -> (Behavior Coord -> Game p)
+         -> (GameInput p -> Reactive (GameOutput p))
          -> IO ()
 glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir internals -> do
     let aspect = (\(width, height) -> fromIntegral width / fromIntegral height) <$> viewportSize
@@ -259,8 +259,13 @@ glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir i
 
     (time, sendTime) <- sync $ newBehavior 0
     (realTime, sendRealTime) <- sync $ newBehavior 0
-    rng <- newStdGen
-    (bSprite, bMusic, eEffects) <- sync $ game aspect eMouse time rng
+    rng0 <- newStdGen
+    GameOutput { goSprite = bSprite, goMusic = bMusic, goEffects = eEffects } <- sync $ game $ GameInput {
+                        giAspect = aspect,
+                        giMouse  = eMouse,
+                        giTime   = time,
+                        giRNG0   = rng0
+                    }
     spriteRef <- newIORef =<< sync (sample bSprite)
     kill1 <- sync $ listen (updates bSprite) (writeIORef spriteRef)
 
@@ -308,6 +313,7 @@ glEngine initGraphics game = initGraphics $ \viewportSize resourceDir stateDir i
                 --putStrLn $ "PRE " ++ showFFloat (Just 3) lost ""
     let drawFrame = do
             tStart <- getTime t0
+            GL.clearColor $= GL.Color4 1 1 1 (1 :: GLfloat)
             GL.clear [ColorBuffer]
             loadIdentity
             (width, height) <- sync $ sample viewportSize
