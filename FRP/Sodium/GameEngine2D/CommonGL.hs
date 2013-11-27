@@ -24,8 +24,8 @@ import Data.Time.Clock
 import FRP.Sodium
 import Graphics.Rendering.OpenGL as GL hiding (Triangle, Rect, translate, normal)
 import qualified Graphics.Rendering.OpenGL as GL
-import Graphics.Rendering.FTGL hiding (Font)
-import qualified Graphics.Rendering.FTGL as FTGL
+--import Graphics.Rendering.FTGL hiding (Font)
+--import qualified Graphics.Rendering.FTGL as FTGL
 import Foreign hiding (unsafePerformIO)
 import Foreign.C
 import System.IO.Unsafe
@@ -195,6 +195,7 @@ offscreen rect@((posX, posY), size@(sizeX, sizeY)) screenHt multisample draw = d
             drawBB
     return (draw, deleteObjectNames [to])
 
+{-
 glLabel :: FTGL.Font
         -> Float        -- Y correction upwards, %
         -> Rect
@@ -228,6 +229,7 @@ glLabel font ycorr rect@((posX, posY),sz@(sizeX, sizeY)) colour text = do
     GL.translate $ Vector3 dx dy (0 :: GLfloat)
     color colour
     renderFont font stext All
+-}
 
 -- | Get system time in seconds since the start of the Unix epoch
 -- (1 Jan 1970).

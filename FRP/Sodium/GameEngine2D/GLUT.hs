@@ -27,7 +27,7 @@ import FRP.Sodium
 import System.FilePath
 import Foreign hiding (unsafePerformIO)
 import Foreign.C
-import qualified Graphics.Rendering.FTGL as FTGL
+--import qualified Graphics.Rendering.FTGL as FTGL
 import Graphics.Rendering.OpenGL.GL as GL hiding (Rect, normal)
 import Graphics.Rendering.OpenGL.Raw
 import qualified Graphics.UI.GLUT as GLUT hiding (Rect, translate)
@@ -218,10 +218,10 @@ instance Platform GLUT where
             spCache :: Maybe (ReaderT SpriteState IO ()),
             spDraw  :: ReaderT SpriteState IO ()
         }
-    data Font GLUT = Font {
+    data Font GLUT = Font {- { 
             ftFont  :: FTGL.Font,
             ftYCorr :: Float
-        }
+        } -}
     newtype Sound GLUT = Sound (IORef SoundInfo)
     type Touch GLUT = ()
 
@@ -244,7 +244,8 @@ instance Platform GLUT where
         liftIO $ preservingMatrix $ do
             GL.translate $ Vector3 (realToFrac vx) (realToFrac vy) (0 :: GLfloat)
             runReaderT action r
-    createFont resPath ycorr = Font <$> FTGL.createPolygonFont resPath <*> pure ycorr 
+    createFont = undefined "GLUT.createFont is not implemented"
+    --createFont resPath ycorr = Font <$> FTGL.createPolygonFont resPath <*> pure ycorr 
     {-
     uncachedLabel rect@((posX, posY), _) (Color4 r g b _) text = Sprite (TextKey text) rect Nothing $ do
         when simulateIOSSpeed $ liftIO $ threadDelay 10000

@@ -54,7 +54,7 @@ library
           build-depends:    ghcjs-base
       else
           build-depends:    stm >= 2.4.2, OpenAL >= 1.5.0.0, OpenGL >= 2.9.0.0, OpenGLRaw >= 1.4.0.0,
-                            GLUT >= 2.5.0.0, bitmap >= 0.0.2, stb-image >= 0.2.1, FTGL >= 1.333,
+                            GLUT >= 2.5.0.0, bitmap >= 0.0.2, stb-image >= 0.2.1,
                             libvorbis
   ghc-options:
         -fwarn-incomplete-patterns
