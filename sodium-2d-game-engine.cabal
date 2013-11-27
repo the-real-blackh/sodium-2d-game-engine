@@ -22,6 +22,7 @@ library
         FRP.Sodium.GameEngine2D.Orientation
         FRP.Sodium.GameEngine2D.Cache
         FRP.Sodium.GameEngine2D.Platform
+        FRP.Sodium.GameEngine2D.Gesture
 
   if os(ios)
       exposed-modules:  FRP.Sodium.GameEngine2D.IOS

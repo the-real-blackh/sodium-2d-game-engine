@@ -2,10 +2,10 @@
 module Freecell (freecell, Background(..)) where
 
 import Button
-import Gesture
 
 import FRP.Sodium.GameEngine2D.Geometry
 import FRP.Sodium.GameEngine2D.Platform
+import FRP.Sodium.GameEngine2D.Gesture
 import FRP.Sodium
 import Control.Applicative
 import Control.Monad
@@ -562,7 +562,7 @@ game res GameInput { giAspect = aspect, giMouse = eMouse0, giTime = time, giRNG0
 
     rec
         (helpPageSpr, eMouse1) <- helpPage res eHelp eMouse0 screen
-        (eDblClick, eMouse) <- detectDoubleClick eMouse1 time
+        (eDblClick, eMouse) <- doubleClickGesture eMouse1 time
         (helpSpr, eHelp, helpSnd) <- button (reHelp res) helpRect eMouse1
 
     (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse1
