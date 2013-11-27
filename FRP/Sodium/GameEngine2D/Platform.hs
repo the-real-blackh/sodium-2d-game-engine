@@ -16,7 +16,10 @@ import FRP.Sodium
 import System.FilePath
 import System.Random (StdGen)
 
-data MouseEvent p = MouseDown (Touch p) Point | MouseMove (Touch p) Point | MouseUp (Touch p) Point
+data MouseEvent p =
+    MouseDown { meTouch :: Touch p,  mePosition :: Point } |
+    MouseMove { meTouch :: Touch p,  mePosition :: Point } |
+    MouseUp   { meTouch :: Touch p,  mePosition :: Point }
 
 deriving instance Show (Touch p) => Show (MouseEvent p)
 

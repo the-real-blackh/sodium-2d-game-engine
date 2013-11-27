@@ -1,5 +1,9 @@
 {-# LANGUAGE RecursiveDo #-}
-module FRP.Sodium.GameEngine2D.Gesture where
+module FRP.Sodium.GameEngine2D.Gesture (
+        clickGesture,
+        doubleClickGesture,
+        dragGesture
+    ) where
 
 import Data.Monoid
 import FRP.Sodium
@@ -18,18 +22,10 @@ maxClickDistance = 10
 -- | A click is a MouseDown followed by a MouseUp where the distance travelled
 -- was less than maxClickDistance.
 clickGesture :: Platform p =>
-                Event (MouseEvent p)
+                Behavior (Point -> Bool)   -- ^ Is inside the object?
+             -> Event (MouseEvent p)
              -> Reactive (Event Point)
-clickGesture eMouse = do
-    mState <- accum Nothing $ flip fmap eMouse $ \me state ->
-            case (me, state) of
-                (MouseDown t pt, _)                      -> Just (t, pt)
-                (MouseUp   t pt, Just (t0, _)) | t == t0 -> Nothing
-                _                                        -> state
-    return $ filterJust $ snapshotWith (\me state -> case (me, state) of
-            (MouseUp t pt, Just (t0, pt0)) | t == t0 && distance pt pt0 < maxClickDistance -> Just pt
-            _                                                           -> Nothing
-        ) eMouse mState
+clickGesture inside eMouse = fst <$> identifyPress inside eMouse
 
 -- | Returns the double click event and the filtered mouse event, where the
 -- second click is taken out.
@@ -59,4 +55,59 @@ doubleClickGesture eMouse time = do
   where
     notMouseDown (MouseDown _ _) = False
     notMouseDown _               = True
+
+-- | A mouse press can go one of two ways. Either it gets released while still
+-- inside maxClickDistance, in which case it's a single mouse click, or it is
+-- held down and we go outside maxClickDistance, in which case it's the initiation
+-- of a drag gesture.
+identifyPress :: Platform p =>
+                 Behavior (Point -> Bool)   -- ^ Is inside the object?
+              -> Event (MouseEvent p)
+              -> Reactive (Event Point, Event (Touch p, Point))
+identifyPress inside eMouse = do
+    rec
+        pending <- hold Nothing $ eDown <> (const Nothing <$> eUp) <> (const Nothing <$> eDragStart)
+        let eDown = filterJust $ snapshotWith (\me (pending, inside) ->
+                    case (me, pending) of
+                        (MouseDown t pt, _) | inside pt -> Just $ Just (t, pt)
+                        _ -> Nothing
+                ) eMouse (liftA2 (,) pending inside)
+            eDragStart = filterJust $ snapshotWith (\me pending ->
+                    case (me, pending) of
+                        (MouseMove t pt, Just (t0, pt0))
+                            | t == t0 && distance pt pt0 >= maxClickDistance -> Just (t0, pt0)
+                        _ -> Nothing
+                ) eMouse pending
+            eUp = filterJust $ snapshotWith (\me pending ->
+                    case (me, pending) of
+                        (MouseUp t pt, Just (t0, pt0)) | t == t0 -> Just pt0
+                        _ -> Nothing
+                ) eMouse pending
+    return (eUp, eDragStart)
+
+-- | Returns offset dragged by, and offset dropped to.
+dragGesture :: Platform p =>
+               Behavior (Point -> Bool)   -- ^ Are we inside the object?
+            -> Event (MouseEvent p)
+            -> Reactive (Behavior (Maybe Vector), Event Vector)
+dragGesture inside eMouse = do
+    eStart <- fmap Just . snd <$> identifyPress inside eMouse
+    rec
+        dragging <- hold Nothing (eStart <> eStop)
+
+        let eDrop = filterJust $ snapshotWith (\me dragging ->
+                    case (me, dragging) of
+                        (MouseUp t pt, Just (t0, pt0)) -> Just (pt `minus` pt0)
+                        _                              -> Nothing
+                ) eMouse dragging
+            eStop = const Nothing <$> eDrop
+    let eDragPos = filterJust $ snapshotWith (\me dragging ->
+                case dragging of
+                    Just (t0, pt0) | meTouch me == t0 -> Just $ Just (mePosition me `minus` pt0)
+                    _                                 -> Nothing
+            ) eMouse dragging
+    -- eDrop and eDragPos will be simultaneous events when the mouse button is
+    -- released. We give precedence to eDrop.
+    dragPos <- hold Nothing $ mergeWith const (const Nothing <$> eDrop) eDragPos 
+    return (dragPos, eDrop)
 
