@@ -30,15 +30,16 @@ clickGesture inside eMouse = fst <$> identifyPress inside eMouse
 -- | Returns the double click event and the filtered mouse event, where the
 -- second click is taken out.
 doubleClickGesture :: Platform p =>
-                      Event (MouseEvent p)
+                      Behavior (Point -> Bool)   -- ^ Is inside the object?
+                   -> Event (MouseEvent p)
                    -> Behavior Double
                    -> Reactive (Event Point, Event (MouseEvent p))
-doubleClickGesture eMouse time = do
+doubleClickGesture inside eMouse time = do
     rec
         mState <- hold Nothing eFirstClk
-        let eTriple = snapshotWith (\me (mState, t) ->
+        let eTriple = snapshotWith (\me (mState, t, inside) ->
                 case (me, mState) of
-                    (MouseDown _ pt, Nothing) -> (Nothing, [me], Just (pt, t))
+                    (MouseDown _ pt, Nothing) | inside pt -> (Nothing, [me], Just (pt, t))
                     (_, Just (_, t0)) | t - t0 >= doubleClickTimeout -> (Nothing, [me], Nothing)
                     (MouseMove _ pt, Just (pt0, _)) ->
                         if distance pt pt0 >= maxClickDistance
@@ -47,7 +48,7 @@ doubleClickGesture eMouse time = do
                     (MouseUp to _,  Just (pt, t0)) -> (Nothing, [MouseUp to pt], Just (pt, t0))
                     (MouseDown _ _, Just (pt, _)) -> (Just pt, [], Nothing)
                     (_, _) -> (Nothing, [me], mState)
-              ) eMouse (liftA2 (,) mState time)
+              ) eMouse (liftA3 (,,) mState time inside)
             eDblClick = filterJust $ (\(a, _, _) -> a) <$> eTriple
             eMouse'   = split      $ (\(_, b, _) -> b) <$> eTriple
             eFirstClk = (\(_, _, c) -> c) <$> eTriple

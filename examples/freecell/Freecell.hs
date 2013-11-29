@@ -562,7 +562,7 @@ game res GameInput { giAspect = aspect, giMouse = eMouse0, giTime = time, giRNG0
 
     rec
         (helpPageSpr, eMouse1) <- helpPage res eHelp eMouse0 screen
-        (eDblClick, eMouse) <- doubleClickGesture eMouse1 time
+        (eDblClick, eMouse) <- doubleClickGesture (pure (const True)) eMouse1 time
         (helpSpr, eHelp, helpSnd) <- button (reHelp res) helpRect eMouse1
 
     (newGameSpr, eNewGame, newGameSnd) <- button (reNewGame res) newGameRect eMouse1
