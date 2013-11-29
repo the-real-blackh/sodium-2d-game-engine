@@ -49,16 +49,17 @@ rectSize (_, size) = size
 
 -- | Drop the specified amount off the left of the rectangle.
 dropLeft :: Coord -> Rect -> Rect
-dropLeft chop rect = translateRect (chop*0.5, 0) . scaleRect ((w-chop)/w, 1) $ rect
-  where w = rectWidth rect
+dropLeft chop rect = edgesRect (x0', y0, max x1 x0', y1) 
+  where (x0, y0, x1, y1) = rectEdges rect
+        x0' = x0 + chop
 
 dropLeftP :: Float -> Rect -> Rect
 dropLeftP p rect = dropLeft (p * w * 0.01) rect
   where w = rectWidth rect
 
 takeLeft :: Coord -> Rect -> Rect
-takeLeft chop rect = dropRight (w - chop) rect
-  where w = rectWidth rect
+takeLeft chop rect = edgesRect (x0, y0, x0 + chop, y1)
+  where (x0, y0, x1, y1) = rectEdges rect
 
 takeLeftP :: Float -> Rect -> Rect
 takeLeftP p rect = takeLeft (p * w * 0.01) rect
@@ -66,16 +67,17 @@ takeLeftP p rect = takeLeft (p * w * 0.01) rect
 
 -- | Drop the specified amount off the right of the rectangle.
 dropRight :: Coord -> Rect -> Rect
-dropRight chop rect = translateRect (-chop*0.5, 0) . scaleRect ((w-chop)/w, 1) $ rect
-  where w = rectWidth rect
+dropRight chop rect = edgesRect (min x0 x1', y0, x1', y1) 
+  where (x0, y0, x1, y1) = rectEdges rect
+        x1' = x1 - chop
 
 dropRightP :: Float -> Rect -> Rect
 dropRightP p rect = dropRight (p * w * 0.01) rect
   where w = rectWidth rect
 
 takeRight :: Coord -> Rect -> Rect
-takeRight chop rect = dropLeft (w - chop) rect  
-  where w = rectWidth rect
+takeRight chop rect = edgesRect (x0, y0, x0 + chop, y1)
+  where (x0, y0, x1, y1) = rectEdges rect
 
 takeRightP :: Float -> Rect -> Rect
 takeRightP p rect = takeRight (p * w * 0.01) rect  
@@ -83,16 +85,17 @@ takeRightP p rect = takeRight (p * w * 0.01) rect
 
 -- | Drop the specified amount off the bottom of the rectangle.
 dropBottom :: Coord -> Rect -> Rect
-dropBottom chop rect = translateRect (0, chop*0.5) . scaleRect (1, (h-chop)/h) $ rect
-  where h = rectHeight rect
+dropBottom chop rect = edgesRect (x0, y0', x1, max y0' y1) 
+  where (x0, y0, x1, y1) = rectEdges rect
+        y0' = y0 + chop
 
 dropBottomP :: Float -> Rect -> Rect
 dropBottomP p rect = dropBottom (p * h * 0.01) rect  
   where h = rectHeight rect
 
 takeBottom :: Coord -> Rect -> Rect
-takeBottom chop rect = dropTop (h - chop) rect
-  where h = rectHeight rect
+takeBottom chop rect = edgesRect (x0, y0, x1, y0 + chop)
+  where (x0, y0, x1, y1) = rectEdges rect
 
 takeBottomP :: Float -> Rect -> Rect
 takeBottomP p rect = takeBottom (p * h * 0.01) rect  
@@ -100,16 +103,17 @@ takeBottomP p rect = takeBottom (p * h * 0.01) rect
 
 -- | Drop the specified amount off the top of the rectangle.
 dropTop :: Coord -> Rect -> Rect
-dropTop chop rect = translateRect (0, -chop*0.5) . scaleRect (1, (h-chop)/h) $ rect
-  where h = rectHeight rect
+dropTop chop rect = edgesRect (x0, min y0 y1', x1, y1') 
+  where (x0, y0, x1, y1) = rectEdges rect
+        y1' = y1 - chop
 
 dropTopP :: Float -> Rect -> Rect
 dropTopP p rect = dropTop (p * h * 0.01) rect  
   where h = rectHeight rect
 
 takeTop :: Coord -> Rect -> Rect
-takeTop chop rect = dropBottom (h - chop) rect
-  where h = rectHeight rect
+takeTop chop rect = edgesRect (x0, y1 - chop, x1, y1)
+  where (x0, y0, x1, y1) = rectEdges rect
 
 takeTopP :: Float -> Rect -> Rect
 takeTopP p rect = takeTop (p * h * 0.01) rect  
