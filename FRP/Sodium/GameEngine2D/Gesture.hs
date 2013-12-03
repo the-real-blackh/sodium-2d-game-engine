@@ -5,6 +5,7 @@ module FRP.Sodium.GameEngine2D.Gesture (
         dragGesture
     ) where
 
+import Data.Maybe
 import Data.Monoid
 import FRP.Sodium
 import FRP.Sodium.GameEngine2D.Platform
@@ -20,12 +21,15 @@ maxClickDistance :: Coord
 maxClickDistance = 10
 
 -- | A click is a MouseDown followed by a MouseUp where the distance travelled
--- was less than maxClickDistance.
+-- was less than maxClickDistance. The second value is whether the mouse is
+-- held down.
 clickGesture :: Platform p =>
                 Behavior (Point -> Bool)   -- ^ Is inside the object?
              -> Event (MouseEvent p)
-             -> Reactive (Event Point)
-clickGesture inside eMouse = fst <$> identifyPress inside eMouse
+             -> Reactive (Event Point, Behavior Bool)
+clickGesture inside eMouse = do
+    (eClick, _, heldDown) <- identifyPress inside eMouse
+    return (eClick, heldDown)
 
 -- | Returns the double click event and the filtered mouse event, where the
 -- second click is taken out.
@@ -64,7 +68,7 @@ doubleClickGesture inside eMouse time = do
 identifyPress :: Platform p =>
                  Behavior (Point -> Bool)   -- ^ Is inside the object?
               -> Event (MouseEvent p)
-              -> Reactive (Event Point, Event (Touch p, Point))
+              -> Reactive (Event Point, Event (Touch p, Point), Behavior Bool)
 identifyPress inside eMouse = do
     rec
         pending <- hold Nothing $ eDown <> (const Nothing <$> eUp) <> (const Nothing <$> eDragStart)
@@ -84,7 +88,7 @@ identifyPress inside eMouse = do
                         (MouseUp t pt, Just (t0, pt0)) | t == t0 -> Just pt0
                         _ -> Nothing
                 ) eMouse pending
-    return (eUp, eDragStart)
+    return (eUp, eDragStart, isJust <$> pending)
 
 -- | Returns offset dragged by, and offset dropped to.
 dragGesture :: Platform p =>
@@ -92,7 +96,7 @@ dragGesture :: Platform p =>
             -> Event (MouseEvent p)
             -> Reactive (Behavior (Maybe Vector), Event Vector)
 dragGesture inside eMouse = do
-    eStart <- fmap Just . snd <$> identifyPress inside eMouse
+    eStart <- fmap Just . (\(_, es, _) -> es) <$> identifyPress inside eMouse
     rec
         dragging <- hold Nothing (eStart <> eStop)
 
