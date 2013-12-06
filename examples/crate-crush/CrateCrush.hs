@@ -57,7 +57,7 @@ game drawCrate drawGrass playCreate playDestroy
         -- Behavior [Rect]
         let rects = fmap (map snd) crates
 
-        -- Event (Behavior Point)
+        -- Event Point
         let eNewPoint = filterJust $ snapshotWith (\mev rects ->
                     case mev of
                         MouseDown _ pt | not (any (pt `inside`) rects) -> Just pt
