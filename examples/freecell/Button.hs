@@ -25,14 +25,14 @@ generalButton enablement selected rect draw eMouse0 = do
     rec
         heldDown <- hold Nothing eHeldDown
         let pair = liftA2 (,) heldDown rect
-            eHeldDown = filterJust $ snapshotWith (\mev (heldDown, rect) -> case mev of
+            eHeldDown = filterJust $ snapshot (\mev (heldDown, rect) -> case mev of
                    MouseDown t pos | pos `inside` rect  -> Just (Just t)
                    MouseUp t _     | heldDown == Just t -> Just Nothing
                    _                                    -> Nothing
                ) eMouse pair
     let boolHeldDown = isJust <$> heldDown
         sprite = draw $ (,,,) <$> rect <*> enablement <*> selected <*> boolHeldDown
-        eClicked = filterJust $ snapshotWith (\mev (heldDown, rect) -> case mev of
+        eClicked = filterJust $ snapshot (\mev (heldDown, rect) -> case mev of
             MouseDown _ pos | pos `inside` rect  -> Just True
             MouseUp t _     | heldDown == Just t -> Just False  -- must be the same touch as the down
             _                                    -> Nothing) eMouse pair
@@ -66,7 +66,7 @@ toggleButton :: Platform p =>
              -> Reactive (sprite, Event Bool, Event ())
 toggleButton enablement state rect draw eMouse = do
     rec
-        let eSel = snapshotWith (\down selected -> if down then not selected else selected)
+        let eSel = snapshot (\down selected -> if down then not selected else selected)
                         eClicked state
         (sprite, eClicked, eSound, _) <- generalButton enablement state rect draw eMouse
     return (sprite, eSel, eSound)

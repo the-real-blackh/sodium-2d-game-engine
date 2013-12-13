@@ -32,8 +32,8 @@ crateCrush args = do
 -- | Pair each event occurrence with a unique id
 identify :: Event a -> Reactive (Event (Int, a))
 identify ea = do
-    ident <- count ea
-    return $ snapshotWith (\a ident -> (ident, a)) ea ident
+    ident <- accum 0 (const (1+) <$> ea)
+    return $ snapshot (\a ident -> (ident, a)) ea ident
 
 game :: Platform p =>
         Drawable p           -- ^ Crate
@@ -58,7 +58,7 @@ game drawCrate drawGrass playCreate playDestroy
         let rects = fmap (map snd) crates
 
         -- Event Point
-        let eNewPoint = filterJust $ snapshotWith (\mev rects ->
+        let eNewPoint = filterJust $ snapshot (\mev rects ->
                     case mev of
                         MouseDown _ pt | not (any (pt `inside`) rects) -> Just pt
                         _ -> Nothing
@@ -74,7 +74,7 @@ game drawCrate drawGrass playCreate playDestroy
                                          ) eIdNewPoint
         let eCreate = fmap (\(id, crate) -> M.insert id crate) eIdNewCrate
 
-        let eDestroy = filterJust $ snapshotWith (\mev crates ->
+        let eDestroy = filterJust $ snapshot (\mev crates ->
                             case mev of
                                 MouseDown _ pt ->
                                     case filter (\(ident, rect) -> pt `inside` rect) crates of
@@ -129,7 +129,7 @@ crate me pt0 crates time = do
         eDeltaT = fmap realToFrac (delta (flip subtract) time)
 
     rec
-        let eAccel = snapshotWith (\dt ((vel, sitting, _), pos, obstacles) ->
+        let eAccel = snapshot (\dt ((vel, sitting, _), pos, obstacles) ->
                         let delta = (0, gravity * dt)
                             vel' = vel `plus` delta
                             pos' = pos `plus` (scale (1/dt) vel')
@@ -153,7 +153,7 @@ crate me pt0 crates time = do
   where (_, crateHt) = crateSize
 
 delta :: (a -> a -> a) -> Behavior a -> Event a
-delta minus a = snapshotWith minus (updates a) a
+delta minus a = snapshot minus (updates a) a
 
 velPlus :: (Point, Bool, Coord) -> (Point, Bool, Coord) -> (Point, Bool, Coord)
 velPlus (a, _, _) (b, sitting, dt) = (a `plus` b, sitting, dt)

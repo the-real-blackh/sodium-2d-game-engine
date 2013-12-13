@@ -17,7 +17,7 @@ cleanMouse eMouse = do
                 MouseUp   to _ -> S.delete to
                 _              -> id
            ) eMouse
-    return $ filterJust $ snapshotWith (\me downs ->
+    return $ filterJust $ snapshot (\me downs ->
             case me of
                 -- Suppress MouseDown if this touch is already down.
                 MouseDown to _ | to `S.member` downs -> Nothing

@@ -41,7 +41,7 @@ doubleClickGesture :: Platform p =>
 doubleClickGesture inside eMouse time = do
     rec
         mState <- hold Nothing eFirstClk
-        let eTriple = snapshotWith (\me (mState, t, inside) ->
+        let eTriple = snapshot (\me (mState, t, inside) ->
                 case (me, mState) of
                     (MouseDown _ pt, Nothing) | inside pt -> (Nothing, [me], Just (pt, t))
                     (_, Just (_, t0)) | t - t0 >= doubleClickTimeout -> (Nothing, [me], Nothing)
@@ -72,18 +72,18 @@ identifyPress :: Platform p =>
 identifyPress inside eMouse = do
     rec
         pending <- hold Nothing $ eDown <> (const Nothing <$> eUp) <> (const Nothing <$> eDragStart)
-        let eDown = filterJust $ snapshotWith (\me (pending, inside) ->
+        let eDown = filterJust $ snapshot (\me (pending, inside) ->
                     case (me, pending) of
                         (MouseDown t pt, _) | inside pt -> Just $ Just (t, pt)
                         _ -> Nothing
                 ) eMouse (liftA2 (,) pending inside)
-            eDragStart = filterJust $ snapshotWith (\me pending ->
+            eDragStart = filterJust $ snapshot (\me pending ->
                     case (me, pending) of
                         (MouseMove t pt, Just (t0, pt0))
                             | t == t0 && distance pt pt0 >= maxClickDistance -> Just (t0, pt0)
                         _ -> Nothing
                 ) eMouse pending
-            eUp = filterJust $ snapshotWith (\me pending ->
+            eUp = filterJust $ snapshot (\me pending ->
                     case (me, pending) of
                         (MouseUp t pt, Just (t0, pt0)) | t == t0 -> Just pt0
                         _ -> Nothing
@@ -100,13 +100,13 @@ dragGesture inside eMouse = do
     rec
         dragging <- hold Nothing (eStart <> eStop)
 
-        let eDrop = filterJust $ snapshotWith (\me dragging ->
+        let eDrop = filterJust $ snapshot (\me dragging ->
                     case (me, dragging) of
                         (MouseUp t pt, Just (t0, pt0)) -> Just (pt `minus` pt0)
                         _                              -> Nothing
                 ) eMouse dragging
             eStop = const Nothing <$> eDrop
-    let eDragPos = filterJust $ snapshotWith (\me dragging ->
+    let eDragPos = filterJust $ snapshot (\me dragging ->
                 case dragging of
                     Just (t0, pt0) | meTouch me == t0 -> Just $ Just (mePosition me `minus` pt0)
                     _                                 -> Nothing

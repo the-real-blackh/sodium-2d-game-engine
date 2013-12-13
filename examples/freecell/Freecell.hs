@@ -240,8 +240,8 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eDblClick dblC
         positions board = iterate (\(x, y) -> (x, y-overlapY board)) (orig board)
     rec
         cards <- hold initCards (eDragRemove `merge` eDblClkRemove `merge` eAddCards `merge` eSetState)
-        let eAddCards = snapshotWith (\newCards cards -> cards ++ newCards) eDrop cards
-            eMouseSelection = filterJust $ snapshotWith (\mev (cards, board) ->
+        let eAddCards = snapshot (\newCards cards -> cards ++ newCards) eDrop cards
+            eMouseSelection = filterJust $ snapshot (\mev (cards, board) ->
                     let (cardWidth, cardHeight) = cardSize board
                         (origX, origY) = orig board
                     in  case mev of
@@ -257,7 +257,7 @@ stack board draw eMouse initCards loc@(Stack ix) freeSpaces eDrop eDblClick dblC
                 ) eMouse (liftA2 (,) cards board)
             eDragRemove = fst <$> eMouseSelection   -- Cards left over when we drag
             eDrag        = snd <$> eMouseSelection   -- Cards removed when we drag
-            eDblClickSelection = filterJust $ snapshotWith (\pt (cards, dests, board) ->
+            eDblClickSelection = filterJust $ snapshot (\pt (cards, dests, board) ->
                     if null cards then Nothing else
                         let cardRect = (positions board !! (length cards - 1), cardSize board)
                         in  if pt `inside` cardRect
@@ -310,7 +310,7 @@ cell board draw emptySpace eMouse loc@(Cell ix) eDrop0 eSetState = do
     rec
         mCard <- hold Nothing $ eDragRemove `merge` eDrop `merge` eSetState
 
-        let eMouseSelection = filterJust $ snapshotWith (\mev (mCard, board) ->
+        let eMouseSelection = filterJust $ snapshot (\mev (mCard, board) ->
                     case (mev, mCard) of
                         (MouseDown _ pt, Just card) | pt `inside` rect board ->
                             Just (Nothing, Bunch (orig board) pt [card] loc)
@@ -351,13 +351,13 @@ grave board draw emptySpace eMouse eDrop eSetState = do
                                       ((cardSpacingNarrow board * 3 + cardWidth*2) * 0.5, cardHeight)
                                   ) 
     rec
-        let eDropModify = snapshotWith (\newCards slots ->
+        let eDropModify = snapshot (\newCards slots ->
                     let newCard@(Card _ suit) = head newCards
                         ix = fromEnum suit
                     in  take ix slots ++ [Just newCard] ++ drop (ix+1) slots 
                 ) eDrop slots
         slots <- hold (replicate noOfGraves Nothing) (eDropModify `merge` eDragRemove `merge` eSetState)
-        let eMouseSelection = filterJust $ snapshotWith (\mev (slots, board) ->
+        let eMouseSelection = filterJust $ snapshot (\mev (slots, board) ->
                     case mev of
                         MouseDown _ pt ->
                             let isIn = map (pt `inside`) (areas board)
@@ -414,7 +414,7 @@ dragger board draw eMouse eStartDrag = do
             MouseDown _ pt -> pt
     rec
         dragging <- hold Nothing $ (const Nothing <$> eDrop) `merge` (Just <$> eStartDrag)
-        let eDrop = filterJust $ snapshotWith (\mev mDragging ->
+        let eDrop = filterJust $ snapshot (\mev mDragging ->
                     case (mev, mDragging) of
                         -- If the mouse is released, and we are dragging...
                         (MouseUp _ pt, Just dragging) -> Just (cardPos pt dragging, dragging)
@@ -435,7 +435,7 @@ dragger board draw eMouse eStartDrag = do
 -- Bool value is True if this is a successful drag, false if it's a snap back to origin.
 dropper :: Event (Point, Bunch) -> Behavior [Destination] -> Event (Bool, (Location, [Card]))
 dropper eDrop dests =
-    snapshotWith (\(pt, bunch) dests ->
+    snapshot (\(pt, bunch) dests ->
                 -- If none of the destinations will accept the dropped cards, then send them
                 -- back where they originated from.
                 let findDest [] = (False, (buOrigin bunch, buCards bunch))
@@ -464,14 +464,14 @@ undoHandler :: Behavior GameState
             -> Event ()                 -- ^ Undo button clicked
             -> Reactive (Event GameState)
 undoHandler state eDragStart eDragEnd eOtherUpdate eUndo = do
-    capturedState <- hold Nothing $ Just <$> snapshot eDragStart state
+    capturedState <- hold Nothing $ Just <$> snapshot (flip const) eDragStart state
     rec
         undos <- hold Seq.empty (ePush `merge` (fst <$> ePop))
 
-        let eUpdate = snapshot eDragEnd capturedState `merge`
-                      snapshot eOtherUpdate (Just <$> state)
+        let eUpdate = snapshot (flip const) eDragEnd capturedState `merge`
+                      snapshot (flip const) eOtherUpdate (Just <$> state)
 
-            ePush = snapshotWith (\mState undos ->
+            ePush = snapshot (\mState undos ->
                     case mState of
                         Just state ->
                             if not (Seq.null undos) && Seq.index undos 0 == state
@@ -480,7 +480,7 @@ undoHandler state eDragStart eDragEnd eOtherUpdate eUndo = do
                         Nothing    -> undos
                 ) eUpdate undos
 
-            ePop = filterJust $ snapshotWith (\_ undos ->
+            ePop = filterJust $ snapshot (\_ undos ->
                     if Seq.null undos
                         then Nothing
                         else Just (Seq.drop 1 undos, Seq.index undos 0)
@@ -519,7 +519,7 @@ backgroundChanger res time aspect = do
     t0 <- sample time
     rec
         bgs <- hold (t0, cycle (reBackgrounds res)) eChange
-        let eChange = filterJust $ snapshotWith (\t (t0, bgs@(bg:bgs')) ->
+        let eChange = filterJust $ snapshot (\t (t0, bgs@(bg:bgs')) ->
                               if t - t0 >= bgDuration bg
                                   then Just (t, bgs')
                                   else Nothing
@@ -588,7 +588,7 @@ game res GameInput { giAspect = aspect, giMouse = eMouse0, giTime = time, giRNG0
                        `merge` (const () <$> eNewGameSt `merge` eRestartSt)
         eUndoSt <- undoHandler gameState (const () <$> eDrag) eSuccessfulDrop
                                           eOtherUndoableEvents eUndo
-        let eRestartSt = snapshot eRestart stackCards0
+        let eRestartSt = snapshot (flip const) eRestart stackCards0
             eSetState = eUndoSt `merge` (mkGameState <$> (eRestartSt `merge` eNewGameSt))
 
         let eSetStackStates = map (\i -> (!! i) . gsStacks <$> eSetState) [0..noOfStacks-1]
