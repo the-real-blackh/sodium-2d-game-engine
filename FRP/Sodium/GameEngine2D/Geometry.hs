@@ -12,6 +12,13 @@ scale s (vx, vy) = (vx*s, vy*s)
 negateVector :: Vector -> Vector
 negateVector (vx, vy) = (-vx, -vy)
 
+magnitude :: Vector -> Coord
+magnitude (vx, vy) = sqrt (vx^2 + vy^2)
+
+normalize :: Vector -> Vector
+normalize v@(vx, vy) = (vx / mag, vy / mag)
+  where mag = magnitude v
+
 distance :: Point -> Point -> Coord
 distance (x0,y0) (x1,y1) = sqrt ((x1-x0)^2 + (y1-y0)^2)
 
