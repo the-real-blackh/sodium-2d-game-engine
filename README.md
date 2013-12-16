@@ -1,4 +1,5 @@
-https://github.com/haskell-openal/OpenAL
+A game engine in Haskell that is based on the Sodium FRP system.
+Currently supported platforms: GLUT (GNU/Linux + Windows) and WebGL using ghcjs. iOS to come.
 
 Work in progress.
 
