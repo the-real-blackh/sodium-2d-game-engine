@@ -1,4 +1,4 @@
-{-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE DoRec #-}
 module FRP.Sodium.GameEngine2D.Gesture (
         clickGesture,
         doubleClickGesture,
