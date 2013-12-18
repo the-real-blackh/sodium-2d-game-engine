@@ -1,4 +1,4 @@
-{-# LANGUAGE RecursiveDo, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE DoRec, OverloadedStrings, TupleSections #-}
 module CrateCrush (crateCrush) where
 
 import FRP.Sodium.GameEngine2D.Geometry
