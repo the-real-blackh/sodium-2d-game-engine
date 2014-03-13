@@ -90,7 +90,7 @@ animate drawScene = do
         let tick = do
                 drawScene
                 requestAnimFrame tick'
-        tick' <- syncCallback True False tick
+        tick' <- syncCallback AlwaysRetain False tick
     requestAnimFrame tick'
 
 data SpriteState = SpriteState {
@@ -174,19 +174,19 @@ instance Platform WebGL where
         
                 blockedRef <- newIORef False
                 queuedRef <- newIORef Nothing
-                md <- syncCallback2 True False $ \jx jy -> do
+                md <- syncCallback2 AlwaysRetain False $ \jx jy -> do
                     Just xx <- fromJSRef jx :: IO (Maybe Float)
                     Just yy <- fromJSRef jy :: IO (Maybe Float)
                     pt <- scaleClick (xx, yy)
                     writeIORef queuedRef Nothing
                     sync $ sendMouse $ MouseDown () pt
-                mu <- syncCallback2 True False $ \jx jy -> do
+                mu <- syncCallback2 AlwaysRetain False $ \jx jy -> do
                     Just xx <- fromJSRef jx :: IO (Maybe Float)
                     Just yy <- fromJSRef jy :: IO (Maybe Float)
                     pt <- scaleClick (xx, yy)
                     writeIORef queuedRef Nothing
                     sync $ sendMouse $ MouseUp () pt
-                mm <- syncCallback2 True False $ \jx jy -> do
+                mm <- syncCallback2 AlwaysRetain False $ \jx jy -> do
                     Just xx <- fromJSRef jx :: IO (Maybe Float)
                     Just yy <- fromJSRef jy :: IO (Maybe Float)
                     pt <- scaleClick (xx, yy)
@@ -198,7 +198,7 @@ instance Platform WebGL where
                         writeIORef blockedRef True
                         sync $ sendMouse $ MouseMove () pt
         
-                or <- syncCallback True False $ do
+                or <- syncCallback AlwaysRetain False $ do
                     w <- canvasWidth
                     h <- canvasHeight
                     resizeViewport w h
